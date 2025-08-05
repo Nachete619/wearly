@@ -748,6 +748,10 @@ export default function OutfitDetailPage() {
                 src={outfit.outfit_images[currentImageIndex]?.image_url || "/placeholder.svg?height=600&width=400"}
                 alt={outfit.title}
                 className="w-full h-auto object-cover"
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement
+                  target.src = "/placeholder.svg?height=600&width=400&text=Outfit"
+                }}
               />
 
               {/* Navigation arrows */}
@@ -795,6 +799,10 @@ export default function OutfitDetailPage() {
                       src={image.image_url || "/placeholder.svg"}
                       alt={`${outfit.title} ${index + 1}`}
                       className="w-full h-full object-cover"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement
+                        target.src = "/placeholder.svg?height=100&width=100&text=Thumbnail"
+                      }}
                     />
                   </button>
                 ))}

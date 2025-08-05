@@ -37,25 +37,42 @@ export const uploadOutfitImages = async (
   files: File[],
 ): Promise<string[]> => {
   const uploadPromises = files.map(async (file, index) => {
-    const filePath = generateOutfitImageFileName(userId, outfitId, file.name, index)
+    try {
+      // Validar la imagen antes de subirla
+      const validation = validateOutfitImage(file)
+      if (!validation.valid) {
+        throw new Error(validation.error || `Imagen ${index + 1} no válida`)
+      }
 
-    const { error: uploadError } = await supabase.storage.from("outfit-images").upload(filePath, file, {
-      cacheControl: "3600",
-      upsert: false,
-    })
+      const filePath = generateOutfitImageFileName(userId, outfitId, file.name, index)
 
-    if (uploadError) {
-      throw new Error(`Error subiendo imagen ${index + 1}: ${uploadError.message}`)
+      const { error: uploadError } = await supabase.storage.from("outfit-images").upload(filePath, file, {
+        cacheControl: "3600",
+        upsert: true, // Cambiado a true para permitir sobrescribir si es necesario
+      })
+
+      if (uploadError) {
+        console.error(`Error al subir imagen ${index + 1}:`, uploadError)
+        throw new Error(`Error subiendo imagen ${index + 1}: ${uploadError.message}`)
+      }
+
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from("outfit-images").getPublicUrl(filePath)
+
+      return publicUrl
+    } catch (error) {
+      console.error(`Error procesando imagen ${index + 1}:`, error)
+      throw error
     }
-
-    const {
-      data: { publicUrl },
-    } = supabase.storage.from("outfit-images").getPublicUrl(filePath)
-
-    return publicUrl
   })
 
-  return Promise.all(uploadPromises)
+  try {
+    return await Promise.all(uploadPromises)
+  } catch (error) {
+    console.error("Error al subir imágenes:", error)
+    throw error
+  }
 }
 
 export const deleteOutfitImages = async (supabase: any, imageUrls: string[]) => {

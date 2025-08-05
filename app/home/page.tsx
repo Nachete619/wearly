@@ -227,7 +227,7 @@ interface Outfit {
 }
 
 export default function HomePage() {
-  const { user, loading } = useAuth()
+  const { user, supabase, loading } = useAuth()
   const [outfits, setOutfits] = useState<Outfit[]>([])
   const [filteredOutfits, setFilteredOutfits] = useState<Outfit[]>([])
   const [searchQuery, setSearchQuery] = useState("")
@@ -250,12 +250,40 @@ export default function HomePage() {
       try {
         setIsLoading(true)
 
-        // Simulate API delay
-        await new Promise((resolve) => setTimeout(resolve, 1000))
+        if (supabase) {
+          // Fetch outfits from Supabase
+          const { data, error } = await supabase
+            .from("outfits")
+            .select(`
+              *,
+              outfit_images (id, image_url, image_order),
+              clothing_items (id, name, url),
+              profiles (id, username, full_name, avatar_url)
+            `)
+            .order("created_at", { ascending: false })
 
-        if (mountedRef.current) {
-          setOutfits(MOCK_OUTFITS)
-          setFilteredOutfits(MOCK_OUTFITS)
+          if (error) {
+            console.error("Error fetching outfits:", error)
+            throw error
+          }
+
+          if (mountedRef.current && data) {
+            // Transform data to match Outfit interface
+            const transformedOutfits = data.map((outfit: any) => ({
+              ...outfit,
+              user: {
+                id: outfit.profiles?.id || "",
+                username: outfit.profiles?.username || "",
+                full_name: outfit.profiles?.full_name || "",
+                avatar_url: outfit.profiles?.avatar_url || "",
+              },
+              is_liked: false, // We'll implement this later
+              is_saved: false, // We'll implement this later
+            }))
+
+            setOutfits(transformedOutfits)
+            setFilteredOutfits(transformedOutfits)
+          }
         }
       } catch (error) {
         console.error("Error loading outfits:", error)
@@ -267,7 +295,7 @@ export default function HomePage() {
     }
 
     loadOutfits()
-  }, [])
+  }, [supabase])
 
   useEffect(() => {
     if (!mountedRef.current) return
@@ -433,7 +461,7 @@ export default function HomePage() {
                   <div className="relative">
                     <div className="relative w-full aspect-[3/4] overflow-hidden">
                       <Image
-                        src={outfit.image_url || "/placeholder.svg"}
+                        src={outfit.outfit_images?.[0]?.image_url || outfit.image_url || "/placeholder.svg"}
                         alt={outfit.title}
                         fill
                         className="object-cover group-hover:scale-105 transition-transform duration-300"

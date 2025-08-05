@@ -17,6 +17,10 @@ import Link from "next/link"
 import Image from "next/image"
 import { EditProfileModal } from "@/components/edit-profile-modal"
 
+// Importar el componente Toast en la parte superior
+import { toast } from "@/components/ui/use-toast"
+import { Trash2 } from "lucide-react"
+
 interface UserProfile {
   id: string
   username: string
@@ -97,7 +101,7 @@ export default function ProfilePage() {
       // Fetch user outfits
       const { data: outfitsData, error: outfitsError } = await supabase
         .from("outfits")
-        .select("*")
+        .select("*, outfit_images(*)")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false })
 
@@ -147,6 +151,36 @@ export default function ProfilePage() {
     // Refresh the profile data to show new outfit
     fetchProfile()
     setShowUploadModal(false)
+  }
+
+  // Añadir la función handleDeleteOutfit DENTRO del componente
+  const handleDeleteOutfit = async (e: React.MouseEvent, outfitId: string) => {
+    e.preventDefault() // Evitar navegación al outfit
+    e.stopPropagation() // Evitar propagación del evento
+    
+    if (!confirm("¿Estás seguro de que deseas eliminar este outfit?")) {
+      return
+    }
+    
+    try {
+      const { deleteOutfit } = await import("@/lib/outfit-actions")
+      await deleteOutfit(supabase, outfitId, user.id)
+      
+      // Actualizar la lista de outfits después de eliminar
+      setOutfits(outfits.filter(outfit => outfit.id !== outfitId))
+      
+      toast({
+        title: "Outfit eliminado",
+        description: "El outfit ha sido eliminado correctamente",
+      })
+    } catch (error) {
+      console.error("Error al eliminar outfit:", error)
+      toast({
+        title: "Error",
+        description: "No se pudo eliminar el outfit",
+        variant: "destructive",
+      })
+    }
   }
 
   if (!mounted || !initialized) {
@@ -283,58 +317,75 @@ export default function ProfilePage() {
               }}
             />
           ) : (
+            // Modificar la tarjeta de outfit
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {outfits.map((outfit) => (
-                <Link key={outfit.id} href={`/outfit/${outfit.id}`}>
-                  <Card className="overflow-hidden hover:shadow-lg transition-all duration-300 transform hover:scale-105 cursor-pointer">
-                    <div className="relative aspect-square">
-                      <Image
-                        src={outfit.image_url || "/placeholder.svg"}
-                        alt={outfit.title}
-                        fill
-                        className="object-cover"
-                        sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 25vw"
-                      />
+                <div key={outfit.id} className="relative">
+                  <Link href={`/outfit/${outfit.id}`}>
+                    <Card className="overflow-hidden hover:shadow-lg transition-all duration-300 transform hover:scale-105 cursor-pointer">
+                      <div className="relative aspect-square">
+                        <Image
+                          src={outfit.outfit_images?.[0]?.image_url || "/placeholder.svg"}
+                          alt={outfit.title}
+                          fill
+                          className="object-cover"
+                          sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 25vw"
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement
+                            target.src = "/placeholder.svg?height=400&width=400&text=Outfit"
+                          }}
+                        />
 
-                      {/* Location badge */}
-                      {outfit.location_name && (
-                        <div className="absolute top-2 left-2">
-                          <Badge
-                            variant="secondary"
-                            className="flex items-center gap-1 bg-black/70 text-white border-0 text-xs"
-                          >
-                            <MapPin className="w-2 h-2" />
-                            <span className="truncate max-w-16">{outfit.location_name}</span>
-                          </Badge>
-                        </div>
-                      )}
-                    </div>
-
-                    <CardContent className="p-3">
-                      <h3 className="font-semibold text-sm mb-1 line-clamp-1">{outfit.title}</h3>
-                      <p className="text-xs text-muted-foreground mb-2 line-clamp-2">{outfit.description}</p>
-
-                      <div className="flex items-center justify-between text-xs text-muted-foreground">
-                        <div className="flex items-center gap-3">
-                          <span className="flex items-center gap-1">
-                            <Heart className="w-3 h-3" />
-                            {outfit.likes_count}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <Bookmark className="w-3 h-3" />
-                            {outfit.saves_count}
-                          </span>
-                        </div>
-                        <span>
-                          {new Date(outfit.created_at).toLocaleDateString("es-ES", {
-                            month: "short",
-                            day: "numeric",
-                          })}
-                        </span>
+                        {/* Location badge */}
+                        {outfit.location_name && (
+                          <div className="absolute top-2 left-2">
+                            <Badge
+                              variant="secondary"
+                              className="flex items-center gap-1 bg-black/70 text-white border-0 text-xs"
+                            >
+                              <MapPin className="w-2 h-2" />
+                              <span className="truncate max-w-16">{outfit.location_name}</span>
+                            </Badge>
+                          </div>
+                        )}
                       </div>
-                    </CardContent>
-                  </Card>
-                </Link>
+
+                      <CardContent className="p-3">
+                        <h3 className="font-semibold text-sm mb-1 line-clamp-1">{outfit.title}</h3>
+                        <p className="text-xs text-muted-foreground mb-2 line-clamp-2">{outfit.description}</p>
+
+                        <div className="flex items-center justify-between text-xs text-muted-foreground">
+                          <div className="flex items-center gap-3">
+                            <span className="flex items-center gap-1">
+                              <Heart className="w-3 h-3" />
+                              {outfit.likes_count}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <Bookmark className="w-3 h-3" />
+                              {outfit.saves_count}
+                            </span>
+                          </div>
+                          <span>
+                            {new Date(outfit.created_at).toLocaleDateString("es-ES", {
+                              month: "short",
+                              day: "numeric",
+                            })}
+                          </span>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </Link>
+                  
+                  {/* Botón de eliminar */}
+                  <Button 
+                    variant="destructive" 
+                    size="icon" 
+                    className="absolute top-2 right-2 w-8 h-8 rounded-full opacity-80 hover:opacity-100"
+                    onClick={(e) => handleDeleteOutfit(e, outfit.id)}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
               ))}
             </div>
           )}
@@ -359,3 +410,6 @@ export default function ProfilePage() {
     </AppLayout>
   )
 }
+
+// Eliminar esta función externa que no funciona
+// const handleDeleteOutfit = async (e: React.MouseEvent, outfitId: string) => { ... }

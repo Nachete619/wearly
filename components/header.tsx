@@ -81,9 +81,17 @@ export function Header({ onUploadClick }: HeaderProps) {
           {user ? (
             <>
               {/* Notifications */}
-              <Button variant="ghost" size="sm" className="relative">
-                <Bell className="h-5 w-5" />
-                <span className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-red-500 text-xs"></span>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="relative"
+                onClick={() => router.push('/notifications')}
+                asChild
+              >
+                <Link href="/notifications">
+                  <Bell className="h-5 w-5" />
+                  <span className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-red-500 text-xs"></span>
+                </Link>
               </Button>
 
               {/* User Menu */}
@@ -91,9 +99,21 @@ export function Header({ onUploadClick }: HeaderProps) {
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="relative h-8 w-8 rounded-full">
                     <Avatar className="h-8 w-8">
-                      <AvatarImage src={user.user_metadata?.avatar_url || "/placeholder.svg"} alt="Avatar" />
+                      <AvatarImage 
+                        src={user.user_metadata?.avatar_url || "/placeholder-user.jpg"} 
+                        alt="Avatar" 
+                        referrerPolicy="no-referrer"
+                        onError={(e) => {
+                          console.log("Error cargando avatar:", e);
+                          // Intentar cargar desde Supabase si está disponible
+                          if (user.id) {
+                            const avatarUrl = `https://xsgames.co/randomusers/avatar.php?g=pixel&key=${user.id}`;
+                            e.currentTarget.src = avatarUrl;
+                          }
+                        }}
+                      />
                       <AvatarFallback>
-                        <User className="h-4 w-4" />
+                        {user.email ? user.email.charAt(0).toUpperCase() : <User className="h-4 w-4" />}
                       </AvatarFallback>
                     </Avatar>
                   </Button>

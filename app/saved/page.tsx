@@ -293,9 +293,13 @@ export default function SavedPage() {
                   >
                     <div className="relative">
                       <img
-                        src={outfit.image || "/placeholder.svg"}
+                        src={outfit.outfit_images?.[0]?.image_url || outfit.image || "/placeholder.svg"}
                         alt={outfit.title}
                         className="w-full h-48 object-cover transition-transform duration-500 group-hover:scale-110"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement
+                          target.src = "/placeholder.svg?height=400&width=300&text=Outfit"
+                        }}
                       />
                       <div className="absolute top-2 right-2">
                         <div className="p-1 bg-white/90 rounded-full shadow-lg">
@@ -341,9 +345,13 @@ export default function SavedPage() {
                   >
                     <div className="flex items-center gap-4">
                       <img
-                        src={outfit.image || "/placeholder.svg"}
+                        src={outfit.outfit_images?.[0]?.image_url || outfit.image || "/placeholder.svg"}
                         alt={outfit.title}
                         className="w-16 h-16 rounded-lg object-cover hover:scale-110 transition-transform duration-300"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement
+                          target.src = "/placeholder.svg?height=100&width=100&text=Outfit"
+                        }}
                       />
 
                       <div className="flex-1 min-w-0">

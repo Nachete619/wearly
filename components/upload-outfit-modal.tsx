@@ -125,61 +125,81 @@ export function UploadOutfitModal({ open, onOpenChange, onSuccess }: UploadOutfi
     try {
       // If Supabase is available, use it. Otherwise, simulate success
       if (supabase) {
-        // Generate a unique outfit ID
-        const outfitId = `outfit_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+        try {
+          // Elimina esta línea:
+          // const outfitId = `outfit_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+          
+          // Prepare outfit data
+          const outfitData: any = {
+            // Elimina el id personalizado y deja que Supabase genere el UUID
+            // id: outfitId,
+            title: title.trim(),
+            description: description.trim() || null,
+            user_id: user.id,
+            likes_count: 0,
+            saves_count: 0,
+            created_at: new Date().toISOString(),
+          }
 
-        // Upload images first
-        const imageUrls = await uploadOutfitImages(supabase, user.id, outfitId, images)
+          // Add location data if provided
+          if (location) {
+            const mapUrls = generateMapUrls(location.lat, location.lng, location.name)
+            outfitData.location_name = location.name
+            outfitData.location_lat = location.lat
+            outfitData.location_lng = location.lng
+            outfitData.url_google = mapUrls.google
+            outfitData.url_waze = mapUrls.waze
+            outfitData.url_apple = mapUrls.apple
+          }
 
-        // Prepare outfit data
-        const outfitData: any = {
-          id: outfitId,
-          title: title.trim(),
-          description: description.trim() || null,
-          user_id: user.id,
-          likes_count: 0,
-          saves_count: 0,
-          created_at: new Date().toISOString(),
-        }
+          // Insert outfit first
+          const { data: outfit, error: outfitError } = await supabase.from("outfits").insert(outfitData).select().single()
 
-        // Add location data if provided
-        if (location) {
-          const mapUrls = generateMapUrls(location.lat, location.lng, location.name)
-          outfitData.location_name = location.name
-          outfitData.location_lat = location.lat
-          outfitData.location_lng = location.lng
-          outfitData.url_google = mapUrls.google
-          outfitData.url_waze = mapUrls.waze
-          outfitData.url_apple = mapUrls.apple
-        }
+          if (outfitError) {
+            console.error("Error al crear outfit:", outfitError)
+            throw outfitError
+          }
 
-        // Insert outfit
-        const { data: outfit, error: outfitError } = await supabase.from("outfits").insert(outfitData).select().single()
+          // Upload images after outfit is created
+          const imageUrls = await uploadOutfitImages(supabase, user.id, outfit.id, images)
 
-        if (outfitError) throw outfitError
-
-        // Insert images
-        const imageInserts = imageUrls.map((url, index) => ({
-          outfit_id: outfit.id,
-          image_url: url,
-          image_order: index + 1,
-        }))
-
-        const { error: imagesError } = await supabase.from("outfit_images").insert(imageInserts)
-
-        if (imagesError) throw imagesError
-
-        // Insert clothing items
-        if (clothingItems.length > 0) {
-          const itemInserts = clothingItems.map((item) => ({
+          // Insert images
+          const imageInserts = imageUrls.map((url, index) => ({
             outfit_id: outfit.id,
-            name: item.name,
-            url: item.url || null,
+            image_url: url,
+            image_order: index + 1,
           }))
 
-          const { error: itemsError } = await supabase.from("clothing_items").insert(itemInserts)
+          const { error: imagesError } = await supabase.from("outfit_images").insert(imageInserts)
 
-          if (itemsError) throw itemsError
+          if (imagesError) {
+            console.error("Error al insertar imágenes:", imagesError)
+            throw imagesError
+          }
+
+          // Insert clothing items
+          if (clothingItems.length > 0) {
+            const itemInserts = clothingItems.map((item) => ({
+              outfit_id: outfit.id,
+              name: item.name,
+              url: item.url || null,
+            }))
+
+            const { error: itemsError } = await supabase.from("clothing_items").insert(itemInserts)
+
+            if (itemsError) {
+              console.error("Error al insertar prendas:", itemsError)
+              throw itemsError
+            }
+          }
+        } catch (error: any) {
+          console.error("Error en el proceso de subida:", error)
+          toast({
+            title: "Error",
+            description: error.message || "No se pudo subir el outfit. Inténtalo de nuevo.",
+            variant: "destructive",
+          })
+          return
         }
       } else {
         // Simulate upload delay for demo
