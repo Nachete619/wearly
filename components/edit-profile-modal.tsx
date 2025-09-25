@@ -11,14 +11,17 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useAuth } from "@/hooks/use-auth"
-import { X, Camera, User, Instagram, LinkIcon, AlertCircle, CheckCircle, Loader2 } from "lucide-react"
+import { X, Camera, User, Instagram, LinkIcon, AlertCircle, CheckCircle, Loader2, Building2, MapPin, Phone, Clock, Globe } from "lucide-react"
 // Import the storage utilities at the top
 import { deleteOldAvatar, validateImageFile, generateAvatarFileName } from "@/lib/storage-utils"
+// Import user actions and types
+import { UserProfile, CompanyProfile, getCurrentCompanyProfile, updateCompanyProfile } from "@/lib/user-actions"
 
 interface EditProfileModalProps {
   isOpen: boolean
   onClose: () => void
   onProfileUpdated?: () => void
+  profile?: UserProfile | null
 }
 
 interface ProfileData {
@@ -30,7 +33,16 @@ interface ProfileData {
   pinterest_url: string
 }
 
-export function EditProfileModal({ isOpen, onClose, onProfileUpdated }: EditProfileModalProps) {
+interface CompanyData {
+  nombre_empresa: string
+  descripcion: string
+  direccion: string
+  telefono: string
+  horarios: string
+  sitio_web: string
+}
+
+export function EditProfileModal({ isOpen, onClose, onProfileUpdated, profile }: EditProfileModalProps) {
   const { user, supabase } = useAuth()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [loading, setLoading] = useState(false)
@@ -40,6 +52,8 @@ export function EditProfileModal({ isOpen, onClose, onProfileUpdated }: EditProf
   const [success, setSuccess] = useState(false)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [currentProfile, setCurrentProfile] = useState<UserProfile | null>(null)
+  const [companyProfile, setCompanyProfile] = useState<CompanyProfile | null>(null)
 
   const [formData, setFormData] = useState<ProfileData>({
     username: "",
@@ -50,12 +64,28 @@ export function EditProfileModal({ isOpen, onClose, onProfileUpdated }: EditProf
     pinterest_url: "",
   })
 
+  const [companyData, setCompanyData] = useState<CompanyData>({
+    nombre_empresa: "",
+    descripcion: "",
+    direccion: "",
+    telefono: "",
+    horarios: "",
+    sitio_web: "",
+  })
+
   // Load user profile data when modal opens
   useEffect(() => {
     if (isOpen && user && supabase) {
       loadProfileData()
     }
   }, [isOpen, user, supabase])
+
+  // Update current profile when prop changes
+  useEffect(() => {
+    if (profile) {
+      setCurrentProfile(profile)
+    }
+  }, [profile])
 
   // Clean up preview URL when modal closes
   useEffect(() => {
@@ -85,6 +115,7 @@ export function EditProfileModal({ isOpen, onClose, onProfileUpdated }: EditProf
         throw profileError
       }
 
+      setCurrentProfile(profile)
       setFormData({
         username: profile?.username || "",
         full_name: profile?.full_name || user.user_metadata?.full_name || user.user_metadata?.name || "",
@@ -93,6 +124,26 @@ export function EditProfileModal({ isOpen, onClose, onProfileUpdated }: EditProf
         instagram_url: profile?.instagram_url || "",
         pinterest_url: profile?.pinterest_url || "",
       })
+
+      // Si es usuario empresa, cargar también los datos de la empresa
+      if (profile?.tipo_usuario === "empresa") {
+        try {
+          const companyProfile = await getCurrentCompanyProfile()
+          setCompanyProfile(companyProfile)
+          if (companyProfile) {
+            setCompanyData({
+              nombre_empresa: companyProfile.nombre_empresa || "",
+              descripcion: companyProfile.descripcion || "",
+              direccion: companyProfile.direccion || "",
+              telefono: companyProfile.telefono || "",
+              horarios: companyProfile.horarios || "",
+              sitio_web: companyProfile.sitio_web || "",
+            })
+          }
+        } catch (error) {
+          console.error("Error loading company profile:", error)
+        }
+      }
     } catch (error: any) {
       console.error("Error loading profile:", error)
       setError("Error al cargar el perfil")
@@ -103,6 +154,12 @@ export function EditProfileModal({ isOpen, onClose, onProfileUpdated }: EditProf
 
   const handleInputChange = (field: keyof ProfileData, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
+    setError(null)
+    setSuccess(false)
+  }
+
+  const handleCompanyInputChange = (field: keyof CompanyData, value: string) => {
+    setCompanyData((prev) => ({ ...prev, [field]: value }))
     setError(null)
     setSuccess(false)
   }
@@ -253,6 +310,30 @@ export function EditProfileModal({ isOpen, onClose, onProfileUpdated }: EditProf
         throw updateError
       }
 
+      // Si es usuario empresa, actualizar también los datos de la empresa
+      if (currentProfile?.tipo_usuario === "empresa" && companyProfile) {
+        try {
+          const result = await updateCompanyProfile({
+            nombre_empresa: companyData.nombre_empresa.trim(),
+            descripcion: companyData.descripcion.trim() || null,
+            direccion: companyData.direccion.trim() || null,
+            telefono: companyData.telefono.trim() || null,
+            horarios: companyData.horarios.trim() || null,
+            sitio_web: companyData.sitio_web.trim() || null,
+            updated_at: new Date().toISOString(),
+          })
+
+          if (!result.success) {
+            setError(result.error || "Error al actualizar los datos de la empresa")
+            return
+          }
+        } catch (error: any) {
+          console.error("Error updating company profile:", error)
+          setError("Error al actualizar los datos de la empresa")
+          return
+        }
+      }
+
       setSuccess(true)
 
       // Call callback to refresh parent component
@@ -347,7 +428,11 @@ export function EditProfileModal({ isOpen, onClose, onProfileUpdated }: EditProf
                 <Avatar className="w-24 h-24">
                   <AvatarImage src={currentAvatarUrl || "/placeholder.svg"} alt="Avatar" />
                   <AvatarFallback className="bg-muted">
-                    <User className="w-12 h-12 text-muted-foreground" />
+                    {currentProfile?.tipo_usuario === "empresa" ? (
+                      <Building2 className="w-12 h-12 text-muted-foreground" />
+                    ) : (
+                      <User className="w-12 h-12 text-muted-foreground" />
+                    )}
                   </AvatarFallback>
                 </Avatar>
                 {uploadingAvatar && (
@@ -491,6 +576,110 @@ export function EditProfileModal({ isOpen, onClose, onProfileUpdated }: EditProf
                   type="url"
                 />
               </div>
+
+              {/* Campos específicos para empresas */}
+              {currentProfile?.tipo_usuario === "empresa" && (
+                <>
+                  <div className="border-t pt-4 mt-4">
+                    <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                      <Building2 className="w-5 h-5" />
+                      Información de la Empresa
+                    </h3>
+                  </div>
+
+                  {/* Nombre de la empresa */}
+                  <div className="space-y-2">
+                    <Label htmlFor="companyName">Nombre de la Empresa</Label>
+                    <Input
+                      id="companyName"
+                      value={companyData.nombre_empresa}
+                      onChange={(e) => handleCompanyInputChange("nombre_empresa", e.target.value)}
+                      placeholder="Nombre de tu empresa"
+                      disabled={saving || uploadingAvatar}
+                      maxLength={100}
+                    />
+                  </div>
+
+                  {/* Descripción de la empresa */}
+                  <div className="space-y-2">
+                    <Label htmlFor="companyDescription">Descripción</Label>
+                    <Textarea
+                      id="companyDescription"
+                      value={companyData.descripcion}
+                      onChange={(e) => handleCompanyInputChange("descripcion", e.target.value)}
+                      placeholder="Describe tu empresa..."
+                      disabled={saving || uploadingAvatar}
+                      maxLength={500}
+                      rows={3}
+                      className="resize-none"
+                    />
+                  </div>
+
+                  {/* Dirección */}
+                  <div className="space-y-2">
+                    <Label htmlFor="companyAddress" className="flex items-center gap-2">
+                      <MapPin className="w-4 h-4 text-muted-foreground" />
+                      Dirección (Opcional)
+                    </Label>
+                    <Input
+                      id="companyAddress"
+                      value={companyData.direccion}
+                      onChange={(e) => handleCompanyInputChange("direccion", e.target.value)}
+                      placeholder="Dirección de la empresa"
+                      disabled={saving || uploadingAvatar}
+                      maxLength={200}
+                    />
+                  </div>
+
+                  {/* Teléfono */}
+                  <div className="space-y-2">
+                    <Label htmlFor="companyPhone" className="flex items-center gap-2">
+                      <Phone className="w-4 h-4 text-muted-foreground" />
+                      Teléfono (Opcional)
+                    </Label>
+                    <Input
+                      id="companyPhone"
+                      value={companyData.telefono}
+                      onChange={(e) => handleCompanyInputChange("telefono", e.target.value)}
+                      placeholder="Número de teléfono"
+                      disabled={saving || uploadingAvatar}
+                      maxLength={20}
+                    />
+                  </div>
+
+                  {/* Horarios */}
+                  <div className="space-y-2">
+                    <Label htmlFor="companyHours" className="flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-muted-foreground" />
+                      Horarios (Opcional)
+                    </Label>
+                    <Input
+                      id="companyHours"
+                      value={companyData.horarios}
+                      onChange={(e) => handleCompanyInputChange("horarios", e.target.value)}
+                      placeholder="Ej: Lunes a Viernes 9:00-18:00"
+                      disabled={saving || uploadingAvatar}
+                      maxLength={100}
+                    />
+                  </div>
+
+                  {/* Sitio web */}
+                  <div className="space-y-2">
+                    <Label htmlFor="companyWebsite" className="flex items-center gap-2">
+                      <Globe className="w-4 h-4 text-muted-foreground" />
+                      Sitio Web (Opcional)
+                    </Label>
+                    <Input
+                      id="companyWebsite"
+                      value={companyData.sitio_web}
+                      onChange={(e) => handleCompanyInputChange("sitio_web", e.target.value)}
+                      placeholder="https://www.tuempresa.com"
+                      disabled={saving || uploadingAvatar}
+                      type="url"
+                    />
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Action Buttons */}

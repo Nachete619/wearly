@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Heart, Bookmark, MapPin, User, Edit, Settings, Plus } from "lucide-react"
+import { Heart, Bookmark, MapPin, User, Edit, Settings, Plus, Building2, Clock, Phone, Globe } from "lucide-react"
 import { EmptyState } from "@/components/empty-state"
 import { LayersIcon } from "@/components/layers-icon"
 import { UploadOutfitModal } from "@/components/upload-outfit-modal"
@@ -21,16 +21,10 @@ import { EditProfileModal } from "@/components/edit-profile-modal"
 import { toast } from "@/components/ui/use-toast"
 import { Trash2 } from "lucide-react"
 
-interface UserProfile {
-  id: string
-  username: string
-  full_name: string
-  bio?: string
-  avatar_url?: string
-  followers_count: number
-  following_count: number
-  outfits_count: number
-}
+// Importar las interfaces y funciones de user-actions
+import { UserProfile, CompanyProfile, getCurrentCompanyProfile } from "@/lib/user-actions"
+
+// La interfaz UserProfile ya está importada desde user-actions
 
 interface Outfit {
   id: string
@@ -46,6 +40,7 @@ interface Outfit {
 export default function ProfilePage() {
   const { user, loading: authLoading, initialized } = useAuth()
   const [profile, setProfile] = useState<UserProfile | null>(null)
+  const [companyProfile, setCompanyProfile] = useState<CompanyProfile | null>(null)
   const [outfits, setOutfits] = useState<Outfit[]>([])
   const [loading, setLoading] = useState(true)
   const [mounted, setMounted] = useState(false)
@@ -85,17 +80,29 @@ export default function ProfilePage() {
           full_name: user.user_metadata?.full_name || "Usuario",
           bio: "Amante de la moda y el estilo",
           avatar_url: user.user_metadata?.avatar_url,
+          tipo_usuario: "comun",
           followers_count: 0,
           following_count: 0,
-          outfits_count: 0,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
         })
       } else {
         setProfile({
           ...profileData,
           followers_count: profileData.followers_count || 0,
           following_count: profileData.following_count || 0,
-          outfits_count: profileData.outfits_count || 0,
+          tipo_usuario: profileData.tipo_usuario || "comun",
         })
+
+        // Si es usuario empresa, obtener también los datos de la empresa
+        if (profileData.tipo_usuario === "empresa") {
+          try {
+            const companyProfile = await getCurrentCompanyProfile()
+            setCompanyProfile(companyProfile)
+          } catch (error) {
+            console.error("Error fetching company profile:", error)
+          }
+        }
       }
 
       // Fetch user outfits
@@ -256,13 +263,21 @@ export default function ProfilePage() {
             <Avatar className="w-20 h-20">
               <AvatarImage src={profile?.avatar_url || "/placeholder.svg"} />
               <AvatarFallback className="text-2xl">
-                <User className="w-8 h-8" />
+                {profile?.tipo_usuario === "empresa" ? (
+                  <Building2 className="w-8 h-8" />
+                ) : (
+                  <User className="w-8 h-8" />
+                )}
               </AvatarFallback>
             </Avatar>
 
             <div className="flex-1">
               <div className="flex items-center gap-4 mb-2">
-                <h1 className="text-2xl font-bold">{profile?.full_name || "Usuario"}</h1>
+                <h1 className="text-2xl font-bold">
+                  {profile?.tipo_usuario === "empresa" && companyProfile
+                    ? companyProfile.nombre_empresa
+                    : profile?.full_name || "Usuario"}
+                </h1>
                 <Button
                   variant="outline"
                   size="sm"
@@ -279,9 +294,53 @@ export default function ProfilePage() {
 
               <p className="text-muted-foreground mb-3">@{profile?.username}</p>
 
-              {profile?.bio && <p className="text-sm mb-4">{profile.bio}</p>}
+              {/* Mostrar descripción según el tipo de usuario */}
+              {(profile?.tipo_usuario === "empresa" && companyProfile) ? (
+                <div className="space-y-3">
+                  {companyProfile.descripcion && (
+                    <p className="text-sm mb-4">{companyProfile.descripcion}</p>
+                  )}
+                  
+                  {/* Información de la empresa */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                    {companyProfile.direccion && (
+                      <div className="flex items-center gap-2">
+                        <MapPin className="w-4 h-4 text-muted-foreground" />
+                        <span>{companyProfile.direccion}</span>
+                      </div>
+                    )}
+                    {companyProfile.telefono && (
+                      <div className="flex items-center gap-2">
+                        <Phone className="w-4 h-4 text-muted-foreground" />
+                        <span>{companyProfile.telefono}</span>
+                      </div>
+                    )}
+                    {companyProfile.horarios && (
+                      <div className="flex items-center gap-2">
+                        <Clock className="w-4 h-4 text-muted-foreground" />
+                        <span>{companyProfile.horarios}</span>
+                      </div>
+                    )}
+                    {companyProfile.sitio_web && (
+                      <div className="flex items-center gap-2">
+                        <Globe className="w-4 h-4 text-muted-foreground" />
+                        <a 
+                          href={companyProfile.sitio_web} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:underline"
+                        >
+                          Sitio web
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                profile?.bio && <p className="text-sm mb-4">{profile.bio}</p>
+              )}
 
-              <div className="flex gap-6 text-sm">
+              <div className="flex gap-6 text-sm mt-4">
                 <span>
                   <strong>{outfits.length}</strong> outfits
                 </span>
@@ -397,8 +456,9 @@ export default function ProfilePage() {
             isOpen={showEditModal}
             onClose={() => setShowEditModal(false)}
             profile={profile}
-            onProfileUpdate={(updatedProfile) => {
-              setProfile(updatedProfile)
+            onProfileUpdated={() => {
+              // Recargar el perfil y los datos de empresa
+              fetchProfile()
               setShowEditModal(false)
             }}
           />
