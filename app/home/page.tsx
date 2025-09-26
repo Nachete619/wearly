@@ -10,6 +10,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
 import { UploadOutfitModal } from "@/components/upload-outfit-modal"
+import { GeneralPostsFeed } from "@/components/general-posts-feed"
 import { Search, Filter, Heart, Bookmark, MessageCircle, MapPin, Plus, TrendingUp } from "lucide-react"
 import Link from "next/link"
 import Image from "next/image"
@@ -234,6 +235,7 @@ export default function HomePage() {
   const [activeFilter, setActiveFilter] = useState("Todos")
   const [isLoading, setIsLoading] = useState(true)
   const [showUploadModal, setShowUploadModal] = useState(false)
+  const [activeTab, setActiveTab] = useState<"outfits" | "posts">("outfits")
   const mountedRef = useRef(true)
 
   useEffect(() => {
@@ -397,35 +399,61 @@ export default function HomePage() {
           </p>
         </div>
 
-        {/* Search and Filters */}
-        <div className="flex flex-col sm:flex-row gap-4 mb-8">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-            <Input
-              placeholder="Buscar outfits o usuarios..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
-            />
-          </div>
-
-          <div className="flex gap-2">
-            {["Todos", "Recientes", "Con ubicación"].map((filter) => (
-              <Button
-                key={filter}
-                variant={activeFilter === filter ? "default" : "outline"}
-                size="sm"
-                onClick={() => setActiveFilter(filter)}
-                className="flex items-center gap-2"
-              >
-                {filter === "Todos" && <Filter className="w-4 h-4" />}
-                {filter === "Recientes" && <TrendingUp className="w-4 h-4" />}
-                {filter === "Con ubicación" && <MapPin className="w-4 h-4" />}
-                {filter}
-              </Button>
-            ))}
-          </div>
+        {/* Tabs */}
+        <div className="flex gap-1 mb-6 bg-muted p-1 rounded-lg w-fit mx-auto">
+          <button
+            onClick={() => setActiveTab("outfits")}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+              activeTab === "outfits"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Outfits
+          </button>
+          <button
+            onClick={() => setActiveTab("posts")}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+              activeTab === "posts"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Publicaciones
+          </button>
         </div>
+
+        {/* Search and Filters - Solo para outfits */}
+        {activeTab === "outfits" && (
+          <div className="flex flex-col sm:flex-row gap-4 mb-8">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+              <Input
+                placeholder="Buscar outfits o usuarios..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+
+            <div className="flex gap-2">
+              {["Todos", "Recientes", "Con ubicación"].map((filter) => (
+                <Button
+                  key={filter}
+                  variant={activeFilter === filter ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setActiveFilter(filter)}
+                  className="flex items-center gap-2"
+                >
+                  {filter === "Todos" && <Filter className="w-4 h-4" />}
+                  {filter === "Recientes" && <TrendingUp className="w-4 h-4" />}
+                  {filter === "Con ubicación" && <MapPin className="w-4 h-4" />}
+                  {filter}
+                </Button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Loading State */}
         {isLoading && (
@@ -449,9 +477,11 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* Outfits Grid */}
+        {/* Content */}
         {!isLoading && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          <>
+            {activeTab === "outfits" ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {filteredOutfits.map((outfit) => (
               <Card
                 key={outfit.id}
@@ -493,19 +523,25 @@ export default function HomePage() {
                 <CardContent className="p-4">
                   {/* User Info */}
                   <div className="flex items-center gap-3 mb-3">
-                    <Avatar className="w-8 h-8">
-                      <AvatarImage src={outfit.user.avatar_url || "/placeholder.svg"} alt={outfit.user.full_name} />
-                      <AvatarFallback>
-                        {outfit.user.full_name
-                          .split(" ")
-                          .map((n) => n[0])
-                          .join("")}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm truncate">{outfit.user.full_name}</p>
-                      <p className="text-xs text-muted-foreground truncate">@{outfit.user.username}</p>
-                    </div>
+                    <Link 
+                      href={`/profile/${outfit.user.username}`}
+                      className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Avatar className="w-8 h-8">
+                        <AvatarImage src={outfit.user.avatar_url || "/placeholder.svg"} alt={outfit.user.full_name} />
+                        <AvatarFallback>
+                          {outfit.user.full_name
+                            .split(" ")
+                            .map((n) => n[0])
+                            .join("")}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm truncate hover:underline">{outfit.user.full_name}</p>
+                        <p className="text-xs text-muted-foreground truncate">@{outfit.user.username}</p>
+                      </div>
+                    </Link>
                     <span className="text-xs text-muted-foreground">{formatDate(outfit.created_at)}</span>
                   </div>
 
@@ -550,32 +586,37 @@ export default function HomePage() {
                   </div>
                 </CardContent>
               </Card>
-            ))}
-          </div>
-        )}
+                ))}
+              </div>
+            ) : (
+              /* Feed de Publicaciones */
+              <GeneralPostsFeed limit={20} showLoadMore={true} />
+            )}
 
-        {/* Empty State */}
-        {!isLoading && filteredOutfits.length === 0 && (
-          <div className="text-center py-12">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-muted flex items-center justify-center">
-              <Search className="w-8 h-8 text-muted-foreground" />
-            </div>
-            <h3 className="text-lg font-semibold mb-2">No se encontraron outfits</h3>
-            <p className="text-muted-foreground mb-4">
-              {searchQuery
-                ? `No hay resultados para "${searchQuery}"`
-                : "Intenta cambiar los filtros o buscar algo diferente"}
-            </p>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setSearchQuery("")
-                setActiveFilter("Todos")
-              }}
-            >
-              Limpiar filtros
-            </Button>
-          </div>
+            {/* Empty State para outfits */}
+            {activeTab === "outfits" && filteredOutfits.length === 0 && (
+              <div className="text-center py-12">
+                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-muted flex items-center justify-center">
+                  <Search className="w-8 h-8 text-muted-foreground" />
+                </div>
+                <h3 className="text-lg font-semibold mb-2">No se encontraron outfits</h3>
+                <p className="text-muted-foreground mb-4">
+                  {searchQuery
+                    ? `No hay resultados para "${searchQuery}"`
+                    : "Intenta cambiar los filtros o buscar algo diferente"}
+                </p>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setSearchQuery("")
+                    setActiveFilter("Todos")
+                  }}
+                >
+                  Limpiar filtros
+                </Button>
+              </div>
+            )}
+          </>
         )}
 
         {/* Floating Upload Button */}

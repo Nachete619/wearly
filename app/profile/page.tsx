@@ -16,6 +16,8 @@ import { UploadOutfitModal } from "@/components/upload-outfit-modal"
 import Link from "next/link"
 import Image from "next/image"
 import { EditProfileModal } from "@/components/edit-profile-modal"
+import { CompanyProfileTabs } from "@/components/company-profile-tabs"
+import { CreatePostModal } from "@/components/create-post-modal"
 
 // Importar el componente Toast en la parte superior
 import { toast } from "@/components/ui/use-toast"
@@ -23,6 +25,7 @@ import { Trash2 } from "lucide-react"
 
 // Importar las interfaces y funciones de user-actions
 import { UserProfile, CompanyProfile, getCurrentCompanyProfile } from "@/lib/user-actions"
+import { GeneralPost } from "@/lib/social-actions"
 
 // La interfaz UserProfile ya está importada desde user-actions
 
@@ -46,6 +49,7 @@ export default function ProfilePage() {
   const [mounted, setMounted] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [showUploadModal, setShowUploadModal] = useState(false)
+  const [showCreatePostModal, setShowCreatePostModal] = useState(false)
   const mountedRef = useRef(true)
   const supabase = getBrowserSupabase()
 
@@ -158,6 +162,24 @@ export default function ProfilePage() {
     // Refresh the profile data to show new outfit
     fetchProfile()
     setShowUploadModal(false)
+  }
+
+  const handlePostCreated = (post: GeneralPost) => {
+    // Refresh the profile data to show new post
+    fetchProfile()
+    setShowCreatePostModal(false)
+    toast({
+      title: "Publicación creada",
+      description: "Tu publicación ha sido publicada exitosamente",
+    })
+  }
+
+  const handleUploadProduct = () => {
+    // TODO: Implementar modal para subir productos
+    toast({
+      title: "Próximamente",
+      description: "La funcionalidad de productos estará disponible pronto",
+    })
   }
 
   // Añadir la función handleDeleteOutfit DENTRO del componente
@@ -287,6 +309,18 @@ export default function ProfilePage() {
                   <Edit className="w-4 h-4" />
                   Editar perfil
                 </Button>
+                {profile?.username && (
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    asChild
+                    className="flex items-center gap-2"
+                  >
+                    <Link href={`/profile/${profile.username}`}>
+                      Ver perfil público
+                    </Link>
+                  </Button>
+                )}
                 <Button variant="outline" size="sm">
                   <Settings className="w-4 h-4" />
                 </Button>
@@ -355,98 +389,108 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* Outfits Grid */}
+        {/* Content Section */}
         <div className="mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold">Mis Outfits</h2>
-            <Button size="sm" onClick={() => setShowUploadModal(true)}>
-              <Plus className="w-4 h-4 mr-2" />
-              Subir outfit
-            </Button>
-          </div>
-
-          {outfits.length === 0 ? (
-            <EmptyState
-              icon={<LayersIcon className="w-20 h-20" />}
-              title="No tienes outfits"
-              description="Comparte tu primer look con la comunidad"
-              action={{
-                label: "Subir outfit",
-                onClick: () => setShowUploadModal(true),
-              }}
+          {profile?.tipo_usuario === "empresa" ? (
+            // Pestañas para empresas
+            <CompanyProfileTabs
+              userId={user?.id || ""}
+              isOwnProfile={true}
+              onUploadProduct={handleUploadProduct}
+              onUploadPost={() => setShowCreatePostModal(true)}
             />
           ) : (
-            // Modificar la tarjeta de outfit
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {outfits.map((outfit) => (
-                <div key={outfit.id} className="relative">
-                  <Link href={`/outfit/${outfit.id}`}>
-                    <Card className="overflow-hidden hover:shadow-lg transition-all duration-300 transform hover:scale-105 cursor-pointer">
-                      <div className="relative aspect-square">
-                        <Image
-                          src={outfit.outfit_images?.[0]?.image_url || "/placeholder.svg"}
-                          alt={outfit.title}
-                          fill
-                          className="object-cover"
-                          sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 25vw"
-                          onError={(e) => {
-                            const target = e.target as HTMLImageElement
-                            target.src = "/placeholder.svg?height=400&width=400&text=Outfit"
-                          }}
-                        />
+            // Outfits para usuarios comunes
+            <>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold">Mis Outfits</h2>
+                <Button size="sm" onClick={() => setShowUploadModal(true)}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Subir outfit
+                </Button>
+              </div>
 
-                        {/* Location badge */}
-                        {outfit.location_name && (
-                          <div className="absolute top-2 left-2">
-                            <Badge
-                              variant="secondary"
-                              className="flex items-center gap-1 bg-black/70 text-white border-0 text-xs"
-                            >
-                              <MapPin className="w-2 h-2" />
-                              <span className="truncate max-w-16">{outfit.location_name}</span>
-                            </Badge>
+              {outfits.length === 0 ? (
+                <EmptyState
+                  icon={<LayersIcon className="w-20 h-20" />}
+                  title="No tienes outfits"
+                  description="Comparte tu primer look con la comunidad"
+                  action={{
+                    label: "Subir outfit",
+                    onClick: () => setShowUploadModal(true),
+                  }}
+                />
+              ) : (
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {outfits.map((outfit) => (
+                    <div key={outfit.id} className="relative">
+                      <Link href={`/outfit/${outfit.id}`}>
+                        <Card className="overflow-hidden hover:shadow-lg transition-all duration-300 transform hover:scale-105 cursor-pointer">
+                          <div className="relative aspect-square">
+                            <Image
+                              src={outfit.outfit_images?.[0]?.image_url || "/placeholder.svg"}
+                              alt={outfit.title}
+                              fill
+                              className="object-cover"
+                              sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 25vw"
+                              onError={(e) => {
+                                const target = e.target as HTMLImageElement
+                                target.src = "/placeholder.svg?height=400&width=400&text=Outfit"
+                              }}
+                            />
+
+                            {outfit.location_name && (
+                              <div className="absolute top-2 left-2">
+                                <Badge
+                                  variant="secondary"
+                                  className="flex items-center gap-1 bg-black/70 text-white border-0 text-xs"
+                                >
+                                  <MapPin className="w-2 h-2" />
+                                  <span className="truncate max-w-16">{outfit.location_name}</span>
+                                </Badge>
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </div>
 
-                      <CardContent className="p-3">
-                        <h3 className="font-semibold text-sm mb-1 line-clamp-1">{outfit.title}</h3>
-                        <p className="text-xs text-muted-foreground mb-2 line-clamp-2">{outfit.description}</p>
+                          <CardContent className="p-3">
+                            <h3 className="font-semibold text-sm mb-1 line-clamp-1">{outfit.title}</h3>
+                            <p className="text-xs text-muted-foreground mb-2 line-clamp-2">{outfit.description}</p>
 
-                        <div className="flex items-center justify-between text-xs text-muted-foreground">
-                          <div className="flex items-center gap-3">
-                            <span className="flex items-center gap-1">
-                              <Heart className="w-3 h-3" />
-                              {outfit.likes_count}
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <Bookmark className="w-3 h-3" />
-                              {outfit.saves_count}
-                            </span>
-                          </div>
-                          <span>
-                            {new Date(outfit.created_at).toLocaleDateString("es-ES", {
-                              month: "short",
-                              day: "numeric",
-                            })}
-                          </span>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </Link>
-                  
-                  {/* Botón de eliminar */}
-                  <Button 
-                    variant="destructive" 
-                    size="icon" 
-                    className="absolute top-2 right-2 w-8 h-8 rounded-full opacity-80 hover:opacity-100"
-                    onClick={(e) => handleDeleteOutfit(e, outfit.id)}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
+                            <div className="flex items-center justify-between text-xs text-muted-foreground">
+                              <div className="flex items-center gap-3">
+                                <span className="flex items-center gap-1">
+                                  <Heart className="w-3 h-3" />
+                                  {outfit.likes_count}
+                                </span>
+                                <span className="flex items-center gap-1">
+                                  <Bookmark className="w-3 h-3" />
+                                  {outfit.saves_count}
+                                </span>
+                              </div>
+                              <span>
+                                {new Date(outfit.created_at).toLocaleDateString("es-ES", {
+                                  month: "short",
+                                  day: "numeric",
+                                })}
+                              </span>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </Link>
+                      
+                      <Button 
+                        variant="destructive" 
+                        size="icon" 
+                        className="absolute top-2 right-2 w-8 h-8 rounded-full opacity-80 hover:opacity-100"
+                        onClick={(e) => handleDeleteOutfit(e, outfit.id)}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              )}
+            </>
           )}
         </div>
 
@@ -466,6 +510,13 @@ export default function ProfilePage() {
 
         {/* Upload Modal */}
         <UploadOutfitModal open={showUploadModal} onOpenChange={setShowUploadModal} onSuccess={handleUploadSuccess} />
+
+        {/* Create Post Modal */}
+        <CreatePostModal
+          isOpen={showCreatePostModal}
+          onClose={() => setShowCreatePostModal(false)}
+          onPostCreated={handlePostCreated}
+        />
       </div>
     </AppLayout>
   )

@@ -357,11 +357,16 @@ export default function SavedPage() {
                       <div className="flex-1 min-w-0">
                         <h3 className="font-medium text-foreground mb-1">{outfit.title}</h3>
                         <div className="flex items-center gap-2 mb-2">
-                          <Avatar className="w-6 h-6">
-                            <AvatarImage src={outfit.user.avatar || "/placeholder.svg"} />
-                            <AvatarFallback className="text-xs">{outfit.user.name.slice(0, 2)}</AvatarFallback>
-                          </Avatar>
-                          <span className="text-sm text-muted-foreground">{outfit.user.name}</span>
+                          <Link 
+                            href={`/profile/${outfit.user.username || outfit.user.name.toLowerCase().replace(/\s+/g, '')}`}
+                            className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+                          >
+                            <Avatar className="w-6 h-6">
+                              <AvatarImage src={outfit.user.avatar || "/placeholder.svg"} />
+                              <AvatarFallback className="text-xs">{outfit.user.name.slice(0, 2)}</AvatarFallback>
+                            </Avatar>
+                            <span className="text-sm text-muted-foreground hover:underline">{outfit.user.name}</span>
+                          </Link>
                         </div>
                         <div className="flex gap-2">
                           {outfit.tags.slice(0, 3).map((tag) => (

@@ -4,6 +4,7 @@ import type React from "react"
 
 import { useState, useEffect, useCallback } from "react"
 import { useParams, useRouter } from "next/navigation"
+import Link from "next/link"
 import { AppLayout } from "@/components/app-layout"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -814,18 +815,23 @@ export default function OutfitDetailPage() {
           <div className="space-y-6">
             {/* User info */}
             <div className="flex items-center gap-3">
-              <Avatar className="w-12 h-12">
-                <AvatarImage src={outfit.profiles.avatar_url || "/placeholder.svg"} />
-                <AvatarFallback>
-                  <User className="w-6 h-6" />
-                </AvatarFallback>
-              </Avatar>
-              <div>
-                <p className="font-semibold">{outfit.profiles.full_name || "Usuario"}</p>
-                {outfit.profiles.username && (
-                  <p className="text-sm text-muted-foreground">@{outfit.profiles.username}</p>
-                )}
-              </div>
+              <Link 
+                href={`/profile/${outfit.profiles.username}`}
+                className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+              >
+                <Avatar className="w-12 h-12">
+                  <AvatarImage src={outfit.profiles.avatar_url || "/placeholder.svg"} />
+                  <AvatarFallback>
+                    <User className="w-6 h-6" />
+                  </AvatarFallback>
+                </Avatar>
+                <div>
+                  <p className="font-semibold hover:underline">{outfit.profiles.full_name || "Usuario"}</p>
+                  {outfit.profiles.username && (
+                    <p className="text-sm text-muted-foreground">@{outfit.profiles.username}</p>
+                  )}
+                </div>
+              </Link>
             </div>
 
             {/* Title and description */}
