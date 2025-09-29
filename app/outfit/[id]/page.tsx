@@ -297,14 +297,20 @@ interface OutfitData {
 
 interface Comment {
   id: string
-  content: string
+  contenido: string
   created_at: string
-  profiles: {
+  user: {
     id: string
     username: string | null
     full_name: string | null
     avatar_url: string | null
   }
+  // Campos adicionales que pueden venir de PostComment
+  post_id?: string
+  user_id?: string
+  parent_comment_id?: string
+  likes_count?: number
+  updated_at?: string
 }
 
 interface RelatedOutfit {
@@ -329,8 +335,18 @@ export default function OutfitDetailPage() {
 
   // State
   const [outfit, setOutfit] = useState<OutfitData | null>(null)
-  const [comments, setComments] = useState<Comment[]>([])
+  const [comments, setComments] = useState<any[]>([])
   const [relatedOutfits, setRelatedOutfits] = useState<RelatedOutfit[]>([])
+  
+  // Debug: log cuando comments cambie
+  useEffect(() => {
+    console.log('Comments state changed:', comments, 'Length:', comments.length)
+  }, [comments])
+
+  // Reset showAllComments when outfit changes
+  useEffect(() => {
+    setShowAllComments(false)
+  }, [outfitId])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
@@ -342,6 +358,7 @@ export default function OutfitDetailPage() {
   const [isSubmittingComment, setIsSubmittingComment] = useState(false)
   const [isLiking, setIsLiking] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [showAllComments, setShowAllComments] = useState(false)
 
   // Fetch outfit data
   const fetchOutfitData = useCallback(async () => {
@@ -388,7 +405,7 @@ export default function OutfitDetailPage() {
             .from("outfit_comments")
             .select(`
               id,
-              content,
+              contenido,
               created_at,
               profiles (
                 id,
@@ -401,7 +418,18 @@ export default function OutfitDetailPage() {
             .order("created_at", { ascending: false })
 
           if (commentsResponse) {
-            commentsData = commentsResponse
+            // Formatear comentarios para que coincidan con la estructura esperada
+            commentsData = commentsResponse.map((comment: any) => ({
+              id: comment.id,
+              contenido: comment.contenido,
+              created_at: comment.created_at,
+              user: comment.profiles || {
+                id: comment.user_id,
+                username: null,
+                full_name: "Usuario",
+                avatar_url: null
+              }
+            }))
           }
         } catch (supabaseError) {
           console.log("Supabase not available, using mock data")
@@ -476,14 +504,31 @@ export default function OutfitDetailPage() {
   useEffect(() => {
     const loadComments = async () => {
       try {
+        console.log('=== LOADING COMMENTS ===')
         console.log('Loading comments for outfit:', outfitId)
         const result = await getOutfitComments(outfitId)
         console.log('Comments result:', result)
+        console.log('Result success:', result.success)
+        console.log('Result comments:', result.comments)
         if (result.success && result.comments) {
           console.log('Setting comments:', result.comments)
+          console.log('Comments type:', typeof result.comments)
+          console.log('Comments is array:', Array.isArray(result.comments))
+          console.log('Comments length:', result.comments.length)
+          console.log('First comment structure:', result.comments[0])
+          
           setComments(result.comments)
+          console.log('setComments called')
+          
+          // Verificar inmediatamente después
+          setTimeout(() => {
+            console.log('Comments after setComments (delayed):', comments)
+          }, 100)
         } else {
+          console.log('=== NO COMMENTS OR ERROR ===')
           console.log('No comments found or error:', result.error)
+          console.log('Result success:', result.success)
+          console.log('Result comments:', result.comments)
         }
       } catch (error) {
         console.error('Error loading comments:', error)
@@ -1031,7 +1076,8 @@ export default function OutfitDetailPage() {
 
               {/* Comments list */}
               <div className="space-y-4">
-                {comments.map((comment) => (
+                {console.log('Rendering comments:', comments, 'Length:', comments.length)}
+                {(showAllComments ? comments : comments.slice(0, 2)).map((comment) => (
                   <div key={comment.id} className="flex gap-3">
                     <Avatar className="w-8 h-8">
                       <AvatarImage src={comment.user?.avatar_url || "/placeholder.svg"} />
@@ -1060,6 +1106,23 @@ export default function OutfitDetailPage() {
                     </div>
                   </div>
                 ))}
+                
+                {/* Show more/less button */}
+                {comments.length > 2 && (
+                  <div className="pt-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowAllComments(!showAllComments)}
+                      className="text-muted-foreground hover:text-foreground"
+                    >
+                      {showAllComments 
+                        ? `Ver menos comentarios` 
+                        : `Ver todos los comentarios (${comments.length})`
+                      }
+                    </Button>
+                  </div>
+                )}
               </div>
             </div>
           </div>

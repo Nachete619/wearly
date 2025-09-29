@@ -1,80 +1,35 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { AppLayout } from "@/components/app-layout"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Bell, Heart, MessageCircle, UserPlus, TrendingUp, Settings, Check } from "lucide-react"
+import { useAuth } from "@/hooks/use-auth"
+import { getUserNotifications, markNotificationAsRead, markAllNotificationsAsRead, Notification } from "@/lib/notification-actions"
+import { toast } from "@/components/ui/use-toast"
 
-// Datos de ejemplo para notificaciones
-const sampleNotifications = [
-  {
-    id: 1,
-    type: "like",
-    user: {
-      name: "Sofia Martinez",
-      username: "@sofia_style",
-      avatar: "/placeholder.svg?height=40&width=40&text=SM",
-    },
-    action: "le gustó tu outfit",
-    target: "Look casual para viernes",
-    targetImage: "/placeholder.svg?height=60&width=60&text=Outfit",
-    time: "hace 2 minutos",
-    read: false,
-  },
-  {
-    id: 2,
-    type: "comment",
-    user: {
-      name: "Ana Rodriguez",
-      username: "@ana_fashion",
-      avatar: "/placeholder.svg?height=40&width=40&text=AR",
-    },
-    action: "comentó en tu outfit",
-    target: "Elegancia nocturna",
-    targetImage: "/placeholder.svg?height=60&width=60&text=Outfit",
-    comment: "¡Me encanta esta combinación! ¿Dónde conseguiste el vestido?",
-    time: "hace 15 minutos",
-    read: false,
-  },
-  {
-    id: 3,
-    type: "follow",
-    user: {
-      name: "Lucia Fernandez",
-      username: "@lucia_trends",
-      avatar: "/placeholder.svg?height=40&width=40&text=LF",
-    },
-    action: "comenzó a seguirte",
-    time: "hace 1 hora",
-    read: true,
-  },
-  {
-    id: 4,
-    type: "trending",
-    action: "Tu outfit está en tendencia",
-    target: "Street style urbano",
-    targetImage: "/placeholder.svg?height=60&width=60&text=Trending",
-    description: "Tu outfit ha recibido más de 100 likes en las últimas 24 horas",
-    time: "hace 3 horas",
-    read: true,
-  },
-  {
-    id: 5,
-    type: "like",
-    user: {
-      name: "Carmen Lopez",
-      username: "@carmen_chic",
-      avatar: "/placeholder.svg?height=40&width=40&text=CL",
-    },
-    action: "guardó tu outfit",
-    target: "Vibes bohemios",
-    targetImage: "/placeholder.svg?height=60&width=60&text=Saved",
-    time: "hace 5 horas",
-    read: true,
-  },
-]
+// Función para formatear tiempo relativo
+const formatTimeAgo = (dateString: string) => {
+  const date = new Date(dateString)
+  const now = new Date()
+  const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60))
+
+  if (diffInMinutes < 1) return "hace unos segundos"
+  if (diffInMinutes < 60) return `hace ${diffInMinutes} minuto${diffInMinutes !== 1 ? 's' : ''}`
+  
+  const diffInHours = Math.floor(diffInMinutes / 60)
+  if (diffInHours < 24) return `hace ${diffInHours} hora${diffInHours !== 1 ? 's' : ''}`
+  
+  const diffInDays = Math.floor(diffInHours / 24)
+  if (diffInDays < 7) return `hace ${diffInDays} día${diffInDays !== 1 ? 's' : ''}`
+  
+  return date.toLocaleDateString("es-ES", {
+    day: "numeric",
+    month: "short",
+  })
+}
 
 const getNotificationIcon = (type: string) => {
   switch (type) {
@@ -92,15 +47,75 @@ const getNotificationIcon = (type: string) => {
 }
 
 export default function NotificationsPage() {
-  const [notifications, setNotifications] = useState(sampleNotifications)
+  const { user } = useAuth()
+  const [notifications, setNotifications] = useState<Notification[]>([])
   const [filter, setFilter] = useState("todas")
+  const [loading, setLoading] = useState(true)
 
-  const markAsRead = (id: number) => {
-    setNotifications((prev) => prev.map((notif) => (notif.id === id ? { ...notif, read: true } : notif)))
+  // Cargar notificaciones
+  useEffect(() => {
+    const loadNotifications = async () => {
+      if (!user) return
+
+      try {
+        setLoading(true)
+        const result = await getUserNotifications(user.id)
+        
+        if (result.success && result.notifications) {
+          setNotifications(result.notifications)
+        } else {
+          console.error('Error loading notifications:', result.error)
+          toast({
+            title: "Error",
+            description: "No se pudieron cargar las notificaciones",
+            variant: "destructive"
+          })
+        }
+      } catch (error) {
+        console.error('Error loading notifications:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadNotifications()
+  }, [user])
+
+  const markAsRead = async (id: string) => {
+    try {
+      const result = await markNotificationAsRead(id)
+      
+      if (result.success) {
+        setNotifications((prev) => 
+          prev.map((notif) => (notif.id === id ? { ...notif, read: true } : notif))
+        )
+      }
+    } catch (error) {
+      console.error('Error marking notification as read:', error)
+    }
   }
 
-  const markAllAsRead = () => {
-    setNotifications((prev) => prev.map((notif) => ({ ...notif, read: true })))
+  const markAllAsRead = async () => {
+    if (!user) return
+
+    try {
+      const result = await markAllNotificationsAsRead(user.id)
+      
+      if (result.success) {
+        setNotifications((prev) => prev.map((notif) => ({ ...notif, read: true })))
+        toast({
+          title: "Notificaciones marcadas",
+          description: "Todas las notificaciones han sido marcadas como leídas"
+        })
+      }
+    } catch (error) {
+      console.error('Error marking all notifications as read:', error)
+      toast({
+        title: "Error",
+        description: "No se pudieron marcar las notificaciones como leídas",
+        variant: "destructive"
+      })
+    }
   }
 
   const filteredNotifications = notifications.filter((notif) => {
@@ -181,7 +196,15 @@ export default function NotificationsPage() {
 
         {/* Notifications List */}
         <div className="space-y-4">
-          {filteredNotifications.length === 0 ? (
+          {loading ? (
+            <Card className="p-8 text-center animate-fade-in-up">
+              <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
+                <Bell className="w-8 h-8 text-muted-foreground animate-pulse" />
+              </div>
+              <h3 className="text-lg font-medium text-foreground mb-2">Cargando notificaciones...</h3>
+              <p className="text-muted-foreground">Por favor espera un momento</p>
+            </Card>
+          ) : filteredNotifications.length === 0 ? (
             <Card className="p-8 text-center animate-fade-in-up">
               <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
                 <Bell className="w-8 h-8 text-muted-foreground" />
@@ -206,10 +229,12 @@ export default function NotificationsPage() {
                 <div className="flex items-start gap-4">
                   {/* Avatar or Icon */}
                   <div className="relative">
-                    {notification.user ? (
+                    {notification.actor ? (
                       <Avatar className="hover:scale-110 transition-transform duration-300">
-                        <AvatarImage src={notification.user.avatar || "/placeholder.svg"} />
-                        <AvatarFallback>{notification.user.name.slice(0, 2)}</AvatarFallback>
+                        <AvatarImage src={notification.actor.avatar_url || "/placeholder.svg"} />
+                        <AvatarFallback>
+                          {notification.actor.full_name?.slice(0, 2) || notification.actor.username?.slice(0, 2) || "U"}
+                        </AvatarFallback>
                       </Avatar>
                     ) : (
                       <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
@@ -226,34 +251,29 @@ export default function NotificationsPage() {
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1">
                         <p className="text-foreground">
-                          {notification.user && (
+                          {notification.actor && (
                             <span className="font-semibold hover:text-primary transition-colors cursor-pointer">
-                              {notification.user.name}
+                              {notification.actor.full_name || notification.actor.username}
                             </span>
                           )}{" "}
-                          <span className="text-muted-foreground">{notification.action}</span>
-                          {notification.target && (
-                            <span className="font-medium text-foreground"> "{notification.target}"</span>
-                          )}
+                          <span className="text-muted-foreground">{notification.title}</span>
                         </p>
 
-                        {notification.comment && (
-                          <p className="text-muted-foreground text-sm mt-1 italic">"{notification.comment}"</p>
+                        {notification.message && (
+                          <p className="text-muted-foreground text-sm mt-1">{notification.message}</p>
                         )}
 
-                        {notification.description && (
-                          <p className="text-muted-foreground text-sm mt-1">{notification.description}</p>
-                        )}
-
-                        <p className="text-xs text-muted-foreground mt-2">{notification.time}</p>
+                        <p className="text-xs text-muted-foreground mt-2">
+                          {formatTimeAgo(notification.created_at)}
+                        </p>
                       </div>
 
                       {/* Target Image */}
-                      {notification.targetImage && (
+                      {notification.target?.image_url && (
                         <div className="flex-shrink-0">
                           <img
-                            src={notification.targetImage || "/placeholder.svg"}
-                            alt="Outfit"
+                            src={notification.target.image_url}
+                            alt="Target"
                             className="w-12 h-12 rounded-lg object-cover hover:scale-110 transition-transform duration-300"
                           />
                         </div>

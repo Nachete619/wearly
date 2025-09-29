@@ -163,10 +163,14 @@ export default function PublicProfilePage({ params }: PublicProfilePageProps) {
   const handleFollow = async () => {
     if (!currentUser || !profile) return
 
+    console.log('handleFollow called for profile:', profile.id, 'isFollowing:', isFollowing)
+
     try {
       if (isFollowing) {
         // Dejar de seguir
+        console.log('Calling unfollowUser...')
         const result = await unfollowUser(profile.id)
+        console.log('unfollowUser result:', result)
         if (result.success) {
           setIsFollowing(false)
           // Actualizar contador
@@ -179,7 +183,9 @@ export default function PublicProfilePage({ params }: PublicProfilePageProps) {
         }
       } else {
         // Seguir
+        console.log('Calling followUser...')
         const result = await followUser(profile.id)
+        console.log('followUser result:', result)
         if (result.success) {
           setIsFollowing(true)
           // Actualizar contador

@@ -1,4 +1,5 @@
 import { getBrowserSupabase } from './supabase'
+import { createNotification } from './notification-actions'
 
 // Interfaces para el sistema de seguimiento
 export interface FollowData {
@@ -46,6 +47,24 @@ export async function followUser(followingId: string): Promise<{ success: boolea
     // Actualizar contadores en profiles
     await supabase.rpc('increment_followers_count', { user_id: followingId })
     await supabase.rpc('increment_following_count', { user_id: user.id })
+
+    // Crear notificación para el usuario seguido
+    console.log('Creating follow notification for user:', followingId, 'from:', user.id)
+    const { data: followerProfile } = await supabase
+      .from('profiles')
+      .select('username, full_name')
+      .eq('id', user.id)
+      .single()
+
+    const followerName = followerProfile?.full_name || followerProfile?.username || 'Alguien'
+
+    const notificationResult = await createNotification(
+      followingId,
+      'follow',
+      'comenzó a seguirte',
+      `${followerName} comenzó a seguirte`
+    )
+    console.log('Follow notification result:', notificationResult)
 
     return { success: true }
   } catch (error) {

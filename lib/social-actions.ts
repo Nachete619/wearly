@@ -1,4 +1,5 @@
 import { getBrowserSupabase } from './supabase'
+import { createNotification } from './notification-actions'
 
 // Interfaces para las nuevas funcionalidades sociales
 export interface GeneralPost {
@@ -352,6 +353,39 @@ export async function likeOutfit(outfitId: string): Promise<{ success: boolean; 
         })
 
       if (error) throw error
+
+      // Crear notificación para el dueño del outfit
+      console.log('Creating like notification for outfit:', outfitId)
+      const { data: outfit } = await supabase
+        .from('outfits')
+        .select('user_id, titulo')
+        .eq('id', outfitId)
+        .single()
+
+      console.log('Outfit data for notification:', outfit)
+
+      if (outfit && outfit.user_id !== user.id) {
+        // Obtener datos del usuario que dio like
+        const { data: likerProfile } = await supabase
+          .from('profiles')
+          .select('username, full_name')
+          .eq('id', user.id)
+          .single()
+
+        const likerName = likerProfile?.full_name || likerProfile?.username || 'Alguien'
+        const outfitTitle = outfit.titulo || 'tu outfit'
+
+        console.log('Creating notification for user:', outfit.user_id, 'from:', user.id)
+        const notificationResult = await createNotification(
+          outfit.user_id,
+          'like',
+          `le gustó ${outfitTitle}`,
+          `${likerName} le dio like a tu outfit`
+        )
+        console.log('Like notification result:', notificationResult)
+      } else {
+        console.log('No notification created - same user or outfit not found')
+      }
     }
 
     return { success: true }
@@ -412,6 +446,32 @@ export async function toggleSaveOutfit(outfitId: string): Promise<{ success: boo
         .from('saved_outfits')
         .insert({ outfit_id: outfitId, user_id: user.id })
       if (error) throw error
+
+      // Crear notificación para el dueño del outfit
+      const { data: outfit } = await supabase
+        .from('outfits')
+        .select('user_id, titulo')
+        .eq('id', outfitId)
+        .single()
+
+      if (outfit && outfit.user_id !== user.id) {
+        // Obtener datos del usuario que guardó
+        const { data: saverProfile } = await supabase
+          .from('profiles')
+          .select('username, full_name')
+          .eq('id', user.id)
+          .single()
+
+        const saverName = saverProfile?.full_name || saverProfile?.username || 'Alguien'
+        const outfitTitle = outfit.titulo || 'tu outfit'
+
+        await createNotification(
+          outfit.user_id,
+          'save',
+          `guardó ${outfitTitle}`,
+          `${saverName} guardó tu outfit en sus favoritos`
+        )
+      }
     }
 
     return { success: true }
@@ -462,7 +522,7 @@ export async function commentOnOutfit(outfitId: string, contenido: string, paren
       })
       .select(`
         *,
-        user:profiles!outfit_comments_user_id_fkey(
+        profiles (
           id,
           username,
           full_name,
@@ -473,7 +533,44 @@ export async function commentOnOutfit(outfitId: string, contenido: string, paren
 
     if (error) throw error
 
-    return { success: true, comment }
+    // Crear notificación para el dueño del outfit
+    const { data: outfit } = await supabase
+      .from('outfits')
+      .select('user_id, titulo')
+      .eq('id', outfitId)
+      .single()
+
+    if (outfit && outfit.user_id !== user.id) {
+      // Obtener datos del usuario que comentó
+      const { data: commenterProfile } = await supabase
+        .from('profiles')
+        .select('username, full_name')
+        .eq('id', user.id)
+        .single()
+
+      const commenterName = commenterProfile?.full_name || commenterProfile?.username || 'Alguien'
+      const outfitTitle = outfit.titulo || 'tu outfit'
+
+      await createNotification(
+        outfit.user_id,
+        'comment',
+        `comentó en ${outfitTitle}`,
+        `${commenterName} comentó: "${contenido.substring(0, 50)}${contenido.length > 50 ? '...' : ''}"`
+      )
+    }
+
+    // Formatear el comentario para que coincida con la estructura esperada
+    const formattedComment = {
+      ...comment,
+      user: comment.profiles || {
+        id: comment.user_id,
+        username: null,
+        full_name: "Usuario",
+        avatar_url: null
+      }
+    }
+
+    return { success: true, comment: formattedComment }
   } catch (error) {
     console.error('Error commenting on outfit:', error)
     return { success: false, error: error instanceof Error ? error.message : 'Error desconocido' }
@@ -488,41 +585,62 @@ export async function getOutfitComments(outfitId: string): Promise<{ success: bo
 
     console.log('Fetching comments for outfit:', outfitId)
 
-    const { data: comments, error } = await supabase
+    // Primero, obtener comentarios sin join para verificar que existen
+    const { data: commentsRaw, error: commentsError } = await supabase
       .from('outfit_comments')
-      .select(`
-        *,
-        user:profiles!outfit_comments_user_id_fkey(
-          id,
-          username,
-          full_name,
-          avatar_url
-        )
-      `)
+      .select('*')
       .eq('outfit_id', outfitId)
-      .is('parent_comment_id', null) // Solo comentarios principales
+      .is('parent_comment_id', null)
       .order('created_at', { ascending: true })
 
-    console.log('Raw comments from DB:', comments)
-    console.log('Error from DB:', error)
+    console.log('Raw comments without join:', commentsRaw)
+    console.log('Raw comments error:', commentsError)
 
-    if (error) {
-      console.error('Database error:', error)
-      throw error
+    if (commentsError) {
+      console.error('Error fetching raw comments:', commentsError)
+      throw commentsError
     }
 
-    // Simplificar: no cargar respuestas por ahora, solo comentarios principales
-    const formattedComments = (comments || []).map((comment: any) => ({
-      id: comment.id,
-      contenido: comment.contenido,
-      created_at: comment.created_at,
-      user: comment.user || {
+    // Luego, obtener los perfiles por separado
+    const userIds = commentsRaw?.map((c: any) => c.user_id) || []
+    console.log('User IDs to fetch:', userIds)
+
+    let profilesMap: Record<string, any> = {}
+    if (userIds.length > 0) {
+      const { data: profiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, username, full_name, avatar_url')
+        .in('id', userIds)
+
+      console.log('Profiles fetched:', profiles)
+      console.log('Profiles error:', profilesError)
+
+      if (!profilesError && profiles) {
+        profilesMap = profiles.reduce((acc: any, profile: any) => {
+          acc[profile.id] = profile
+          return acc
+        }, {} as Record<string, any>)
+      }
+    }
+
+    console.log('Profiles map:', profilesMap)
+
+    // Formatear comentarios con los datos separados
+    const formattedComments = (commentsRaw || []).map((comment: any) => {
+      const userProfile = profilesMap[comment.user_id] || {
         id: comment.user_id,
         username: null,
         full_name: "Usuario",
         avatar_url: null
       }
-    }))
+
+      return {
+        id: comment.id,
+        contenido: comment.contenido,
+        created_at: comment.created_at,
+        user: userProfile
+      }
+    })
 
     console.log('Formatted comments:', formattedComments)
 

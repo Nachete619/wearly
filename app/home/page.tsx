@@ -326,6 +326,8 @@ export default function HomePage() {
   const handleLike = async (outfitId: string) => {
     if (!mountedRef.current) return
 
+    console.log('handleLike called for outfit:', outfitId)
+
     setOutfits((prev) =>
       prev.map((outfit) => {
         if (outfit.id === outfitId) {
@@ -340,8 +342,11 @@ export default function HomePage() {
     )
 
     try {
-      await likeOutfit(outfitId)
+      console.log('Calling likeOutfit function...')
+      const result = await likeOutfit(outfitId)
+      console.log('likeOutfit result:', result)
     } catch (error) {
+      console.error('Error in handleLike:', error)
       // rollback
       setOutfits((prev) =>
         prev.map((outfit) => {
@@ -361,6 +366,8 @@ export default function HomePage() {
   const handleSave = async (outfitId: string) => {
     if (!mountedRef.current) return
 
+    console.log('handleSave called for outfit:', outfitId)
+
     setOutfits((prev) =>
       prev.map((outfit) => {
         if (outfit.id === outfitId) {
@@ -375,8 +382,11 @@ export default function HomePage() {
     )
 
     try {
-      await toggleSaveOutfit(outfitId)
+      console.log('Calling toggleSaveOutfit function...')
+      const result = await toggleSaveOutfit(outfitId)
+      console.log('toggleSaveOutfit result:', result)
     } catch (error) {
+      console.error('Error in handleSave:', error)
       // rollback
       setOutfits((prev) =>
         prev.map((outfit) => {
