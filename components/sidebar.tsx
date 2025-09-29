@@ -4,16 +4,19 @@ import type React from "react"
 
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { TrendingUp, Home, Bell, Bookmark, Plus, Package } from "lucide-react"
+import { TrendingUp, Home, Bell, Bookmark, Plus, Package, Coins, Shield } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { WearlyLogo } from "@/components/wearly-logo"
 import { useAuth } from "@/hooks/use-auth"
+import { isAdmin } from "@/lib/admin-actions"
+import { useEffect, useState } from "react"
 
 const navigation = [
   { name: "Tendencias", href: "/trends", icon: TrendingUp },
   { name: "Inicio", href: "/home", icon: Home },
   { name: "Productos", href: "/products/public", icon: Package },
+  { name: "Monedas", href: "/coins", icon: Coins, requiresAuth: true },
   { name: "Notificaciones", href: "/notifications", icon: Bell, requiresAuth: true },
   { name: "Guardados", href: "/saved", icon: Bookmark, requiresAuth: true },
 ]
@@ -26,6 +29,17 @@ export function Sidebar({ onUploadClick }: SidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
   const { user } = useAuth()
+  const [isAdminUser, setIsAdminUser] = useState(false)
+
+  useEffect(() => {
+    const checkAdminStatus = async () => {
+      if (user) {
+        const result = await isAdmin()
+        setIsAdminUser(result.success && result.isAdmin)
+      }
+    }
+    checkAdminStatus()
+  }, [user])
 
   const handleUploadClick = () => {
     if (!user) {
@@ -88,6 +102,27 @@ export function Sidebar({ onUploadClick }: SidebarProps) {
             </Link>
           )
         })}
+        
+        {/* Admin link - only show for admins */}
+        {isAdminUser && (
+          <Link
+            href="/admin"
+            className={cn(
+              "p-3 rounded-lg transition-all duration-200 group relative hover:bg-accent",
+              pathname === "/admin" && "bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400"
+            )}
+          >
+            <Shield
+              className={cn(
+                "w-5 h-5 transition-colors",
+                pathname === "/admin" && "text-red-600 dark:text-red-400"
+              )}
+            />
+            <div className="absolute left-12 top-1/2 transform -translate-y-1/2 bg-background border border-border rounded-lg px-2 py-1 text-sm opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50">
+              Administración
+            </div>
+          </Link>
+        )}
       </nav>
 
       {/* Upload button */}

@@ -18,6 +18,7 @@ import Image from "next/image"
 import { EditProfileModal } from "@/components/edit-profile-modal"
 import { CompanyProfileTabs } from "@/components/company-profile-tabs"
 import { CreatePostModal } from "@/components/create-post-modal"
+import { CoinsDisplay } from "@/components/coins-display"
 
 // Importar el componente Toast en la parte superior
 import { toast } from "@/components/ui/use-toast"
@@ -384,6 +385,11 @@ export default function ProfilePage() {
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Coins Display */}
+        <div className="mb-6">
+          <CoinsDisplay />
         </div>
 
         {/* Content Section */}
