@@ -9,7 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { EmptyState } from "@/components/empty-state"
 import { 
   Package, 
-  FileText, 
+  Layers,
   Plus,
   Heart,
   MapPin,
@@ -19,7 +19,6 @@ import {
 import Image from "next/image"
 import Link from "next/link"
 import { getBrowserSupabase } from "@/lib/supabase"
-import { GeneralPost, getGeneralPosts } from "@/lib/social-actions"
 
 interface Product {
   id: string
@@ -50,7 +49,7 @@ export function CompanyProfileTabs({
   onUploadPost 
 }: CompanyProfileTabsProps) {
   const [products, setProducts] = useState<Product[]>([])
-  const [generalPosts, setGeneralPosts] = useState<GeneralPost[]>([])
+  const [outfits, setOutfits] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState("products")
   const supabase = getBrowserSupabase()
@@ -71,21 +70,25 @@ export function CompanyProfileTabs({
     }
   }
 
-  const fetchPosts = async () => {
+  const fetchOutfits = async () => {
     try {
-      const result = await getGeneralPosts({ userId })
-      if (result.success && result.posts) {
-        setGeneralPosts(result.posts)
-      }
+      const { data, error } = await supabase
+        .from("outfits")
+        .select("*, outfit_images(*)")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+
+      if (error) throw error
+      setOutfits(data || [])
     } catch (error) {
-      console.error("Error fetching posts:", error)
+      console.error("Error fetching outfits:", error)
     }
   }
 
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true)
-      await Promise.all([fetchProducts(), fetchPosts()])
+      await Promise.all([fetchProducts(), fetchOutfits()])
       setLoading(false)
     }
     fetchData()
@@ -120,9 +123,9 @@ export function CompanyProfileTabs({
             <Package className="w-4 h-4" />
             Productos ({products.length})
           </TabsTrigger>
-          <TabsTrigger value="posts" className="flex items-center gap-2">
-            <FileText className="w-4 h-4" />
-            Publicaciones ({generalPosts.length})
+          <TabsTrigger value="outfits" className="flex items-center gap-2">
+            <Layers className="w-4 h-4" />
+            Outfits ({outfits.length})
           </TabsTrigger>
         </TabsList>
 
@@ -237,89 +240,47 @@ export function CompanyProfileTabs({
         )}
       </TabsContent>
 
-      {/* Tab: Publicaciones */}
-      <TabsContent value="posts" className="mt-0">
-        {generalPosts.length === 0 ? (
+      {/* Tab: Outfits */}
+      <TabsContent value="outfits" className="mt-0">
+        {outfits.length === 0 ? (
           <EmptyState
-            icon={<FileText className="w-20 h-20" />}
-            title="No hay publicaciones"
-            description={isOwnProfile ? "Comienza a compartir contenido" : "Esta empresa aún no ha publicado contenido"}
-            action={isOwnProfile ? {
-              label: "Crear publicación",
-              onClick: onUploadPost
-            } : undefined}
+            icon={<Layers className="w-20 h-20" />}
+            title="No hay outfits"
+            description={isOwnProfile ? "Comienza a publicar tus looks" : "Esta empresa aún no tiene outfits"}
           />
         ) : (
-          <div className="space-y-6">
-            {generalPosts.map((post) => (
-              <Card key={post.id}>
-                <CardContent className="p-6">
-                  <div className="flex items-center gap-3 mb-4">
-                    <Link 
-                      href={`/profile/${post.user?.username}`}
-                      className="flex items-center gap-3 hover:opacity-80 transition-opacity"
-                    >
-                      <Avatar className="w-10 h-10">
-                        <AvatarImage src={post.user?.avatar_url || "/placeholder.svg"} />
-                        <AvatarFallback>
-                          <Building2 className="w-5 h-5" />
-                        </AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <h4 className="font-semibold hover:underline">{post.user?.full_name}</h4>
-                        <p className="text-sm text-muted-foreground">@{post.user?.username}</p>
-                      </div>
-                    </Link>
-                    <Badge variant="secondary">{post.tipo_publicacion}</Badge>
-                  </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {outfits.map((outfit) => (
+              <Card key={outfit.id} className="overflow-hidden hover:shadow-lg transition-shadow">
+                <div className="relative aspect-square">
+                  <Image
+                    src={outfit.outfit_images?.[0]?.image_url || "/placeholder.svg"}
+                    alt={outfit.title}
+                    fill
+                    className="object-cover"
+                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement
+                      target.src = "/placeholder.svg?height=400&width=400&text=Outfit"
+                    }}
+                  />
+                </div>
 
-                  <h3 className="text-lg font-semibold mb-2">{post.titulo}</h3>
-                  
-                  {post.contenido && (
-                    <p className="text-muted-foreground mb-4">{post.contenido}</p>
-                  )}
-
-                  {post.imagen_url && (
-                    <div className="relative aspect-video mb-4 rounded-lg overflow-hidden">
-                      <Image
-                        src={post.imagen_url}
-                        alt={post.titulo}
-                        fill
-                        className="object-cover"
-                        sizes="(max-width: 768px) 100vw, 50vw"
-                      />
-                    </div>
-                  )}
-
-                  {post.fecha_evento && (
-                    <div className="mb-4 p-3 bg-muted rounded-lg">
-                      <p className="text-sm font-medium">Evento programado:</p>
-                      <p className="text-sm text-muted-foreground">
-                        {new Date(post.fecha_evento).toLocaleDateString("es-ES", {
-                          weekday: "long",
-                          year: "numeric",
-                          month: "long",
-                          day: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit"
-                        })}
-                      </p>
-                    </div>
-                  )}
-
-                  {post.ubicacion && (
-                    <div className="flex items-center gap-2 mb-4 text-sm text-muted-foreground">
-                      <MapPin className="w-4 h-4" />
-                      <span>{post.ubicacion}</span>
+                <CardContent className="p-4">
+                  <h3 className="font-semibold text-lg line-clamp-1">{outfit.title}</h3>
+                  {outfit.location_name && (
+                    <div className="flex items-center gap-1 text-sm text-muted-foreground mb-3">
+                      <MapPin className="w-3 h-3" />
+                      <span className="truncate">{outfit.location_name}</span>
                     </div>
                   )}
 
                   <div className="flex items-center gap-4 text-sm text-muted-foreground">
                     <span className="flex items-center gap-1">
                       <Heart className="w-4 h-4" />
-                      {post.likes_count}
+                      {outfit.likes_count}
                     </span>
-                    <span>{new Date(post.created_at).toLocaleDateString("es-ES")}</span>
+                    <span>{new Date(outfit.created_at).toLocaleDateString("es-ES")}</span>
                   </div>
                 </CardContent>
               </Card>

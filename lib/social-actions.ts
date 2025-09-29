@@ -285,7 +285,7 @@ export async function getGeneralPostComments(postId: string): Promise<{ success:
 
     // Obtener respuestas para cada comentario
     const commentsWithReplies = await Promise.all(
-      (comments || []).map(async (comment) => {
+      (comments || []).map(async (comment: any) => {
         const { data: replies } = await supabase
           .from('general_posts_comments')
           .select(`
@@ -384,6 +384,65 @@ export async function isOutfitLiked(outfitId: string): Promise<boolean> {
   }
 }
 
+// Guardados de outfit
+export async function toggleSaveOutfit(outfitId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const supabase = getBrowserSupabase()
+    if (!supabase) throw new Error('Supabase client not available')
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('Usuario no autenticado')
+
+    const { data: existing } = await supabase
+      .from('saved_outfits')
+      .select('id')
+      .eq('outfit_id', outfitId)
+      .eq('user_id', user.id)
+      .maybeSingle()
+
+    if (existing) {
+      const { error } = await supabase
+        .from('saved_outfits')
+        .delete()
+        .eq('outfit_id', outfitId)
+        .eq('user_id', user.id)
+      if (error) throw error
+    } else {
+      const { error } = await supabase
+        .from('saved_outfits')
+        .insert({ outfit_id: outfitId, user_id: user.id })
+      if (error) throw error
+    }
+
+    return { success: true }
+  } catch (error) {
+    console.error('Error toggling save outfit:', error)
+    return { success: false, error: error instanceof Error ? error.message : 'Error desconocido' }
+  }
+}
+
+export async function isOutfitSaved(outfitId: string): Promise<boolean> {
+  try {
+    const supabase = getBrowserSupabase()
+    if (!supabase) return false
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return false
+
+    const { data } = await supabase
+      .from('saved_outfits')
+      .select('id')
+      .eq('outfit_id', outfitId)
+      .eq('user_id', user.id)
+      .maybeSingle()
+
+    return !!data
+  } catch (error) {
+    console.error('Error checking if outfit is saved:', error)
+    return false
+  }
+}
+
 // Comentar en un outfit
 export async function commentOnOutfit(outfitId: string, contenido: string, parentCommentId?: string): Promise<{ success: boolean; error?: string; comment?: PostComment }> {
   try {
@@ -427,6 +486,8 @@ export async function getOutfitComments(outfitId: string): Promise<{ success: bo
     const supabase = getBrowserSupabase()
     if (!supabase) throw new Error('Supabase client not available')
 
+    console.log('Fetching comments for outfit:', outfitId)
+
     const { data: comments, error } = await supabase
       .from('outfit_comments')
       .select(`
@@ -442,33 +503,30 @@ export async function getOutfitComments(outfitId: string): Promise<{ success: bo
       .is('parent_comment_id', null) // Solo comentarios principales
       .order('created_at', { ascending: true })
 
-    if (error) throw error
+    console.log('Raw comments from DB:', comments)
+    console.log('Error from DB:', error)
 
-    // Obtener respuestas para cada comentario
-    const commentsWithReplies = await Promise.all(
-      (comments || []).map(async (comment) => {
-        const { data: replies } = await supabase
-          .from('outfit_comments')
-          .select(`
-            *,
-            user:profiles!outfit_comments_user_id_fkey(
-              id,
-              username,
-              full_name,
-              avatar_url
-            )
-          `)
-          .eq('parent_comment_id', comment.id)
-          .order('created_at', { ascending: true })
+    if (error) {
+      console.error('Database error:', error)
+      throw error
+    }
 
-        return {
-          ...comment,
-          replies: replies || []
-        }
-      })
-    )
+    // Simplificar: no cargar respuestas por ahora, solo comentarios principales
+    const formattedComments = (comments || []).map((comment: any) => ({
+      id: comment.id,
+      contenido: comment.contenido,
+      created_at: comment.created_at,
+      user: comment.user || {
+        id: comment.user_id,
+        username: null,
+        full_name: "Usuario",
+        avatar_url: null
+      }
+    }))
 
-    return { success: true, comments: commentsWithReplies }
+    console.log('Formatted comments:', formattedComments)
+
+    return { success: true, comments: formattedComments }
   } catch (error) {
     console.error('Error getting outfit comments:', error)
     return { success: false, error: error instanceof Error ? error.message : 'Error desconocido' }

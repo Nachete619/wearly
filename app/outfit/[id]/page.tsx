@@ -28,6 +28,7 @@ import {
   Loader2,
 } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
+import { isOutfitLiked, isOutfitSaved, commentOnOutfit, getOutfitComments } from "@/lib/social-actions"
 import { toast } from "@/hooks/use-toast"
 
 // Mock data for demonstration
@@ -455,6 +456,42 @@ export default function OutfitDetailPage() {
     fetchOutfitData()
   }, [fetchOutfitData])
 
+  // Initialize liked/saved state from DB when user changes
+  useEffect(() => {
+    const initReactions = async () => {
+      if (!user) return
+      try {
+        const [liked, saved] = await Promise.all([
+          isOutfitLiked(outfitId),
+          isOutfitSaved(outfitId),
+        ])
+        setIsLiked(liked)
+        setIsSaved(saved)
+      } catch {}
+    }
+    initReactions()
+  }, [user, outfitId])
+
+  // Load existing comments from DB
+  useEffect(() => {
+    const loadComments = async () => {
+      try {
+        console.log('Loading comments for outfit:', outfitId)
+        const result = await getOutfitComments(outfitId)
+        console.log('Comments result:', result)
+        if (result.success && result.comments) {
+          console.log('Setting comments:', result.comments)
+          setComments(result.comments)
+        } else {
+          console.log('No comments found or error:', result.error)
+        }
+      } catch (error) {
+        console.error('Error loading comments:', error)
+      }
+    }
+    loadComments()
+  }, [outfitId])
+
   // Handle like
   const handleLike = async () => {
     if (!user) {
@@ -471,7 +508,7 @@ export default function OutfitDetailPage() {
     setIsLiking(true)
     const wasLiked = isLiked
     const newLikedState = !wasLiked
-    const newCount = wasLiked ? likesCount - 1 : likesCount + 1
+    const newCount = Math.max(0, wasLiked ? likesCount - 1 : likesCount + 1)
 
     // Optimistic update
     setIsLiked(newLikedState)
@@ -523,7 +560,7 @@ export default function OutfitDetailPage() {
     setIsSaving(true)
     const wasSaved = isSaved
     const newSavedState = !wasSaved
-    const newCount = wasSaved ? savesCount - 1 : savesCount + 1
+    const newCount = Math.max(0, wasSaved ? savesCount - 1 : savesCount + 1)
 
     // Optimistic update
     setIsSaved(newSavedState)
@@ -531,13 +568,14 @@ export default function OutfitDetailPage() {
 
     try {
       if (supabase) {
+        // Usar tabla saved_outfits definida en el esquema
         if (newSavedState) {
-          await supabase.from("outfit_saves").insert({
+          await supabase.from("saved_outfits").insert({
             outfit_id: outfitId,
             user_id: user.id,
           })
         } else {
-          await supabase.from("outfit_saves").delete().eq("outfit_id", outfitId).eq("user_id", user.id)
+          await supabase.from("saved_outfits").delete().eq("outfit_id", outfitId).eq("user_id", user.id)
         }
       }
 
@@ -579,9 +617,9 @@ export default function OutfitDetailPage() {
     try {
       const commentData = {
         id: `temp-${Date.now()}`,
-        content: newComment.trim(),
+        contenido: newComment.trim(),
         created_at: new Date().toISOString(),
-        profiles: {
+        user: {
           id: user.id,
           username: user.user_metadata?.username || null,
           full_name: user.user_metadata?.full_name || user.user_metadata?.name || "Usuario",
@@ -593,13 +631,8 @@ export default function OutfitDetailPage() {
       setComments((prev) => [commentData, ...prev])
       setNewComment("")
 
-      if (supabase) {
-        await supabase.from("outfit_comments").insert({
-          outfit_id: outfitId,
-          user_id: user.id,
-          content: newComment.trim(),
-        })
-      }
+      // Persist using helper to match schema field 'contenido'
+      await commentOnOutfit(outfitId, newComment.trim())
 
       toast({
         title: "¡Comentario agregado!",
@@ -1001,7 +1034,7 @@ export default function OutfitDetailPage() {
                 {comments.map((comment) => (
                   <div key={comment.id} className="flex gap-3">
                     <Avatar className="w-8 h-8">
-                      <AvatarImage src={comment.profiles.avatar_url || "/placeholder.svg"} />
+                      <AvatarImage src={comment.user?.avatar_url || "/placeholder.svg"} />
                       <AvatarFallback>
                         <User className="w-4 h-4" />
                       </AvatarFallback>
@@ -1009,12 +1042,12 @@ export default function OutfitDetailPage() {
                     <div className="flex-1">
                       <div className="bg-muted rounded-lg p-3">
                         <div className="flex items-center gap-2 mb-1">
-                          <span className="font-medium text-sm">{comment.profiles.full_name || "Usuario"}</span>
-                          {comment.profiles.username && (
-                            <span className="text-xs text-muted-foreground">@{comment.profiles.username}</span>
+                          <span className="font-medium text-sm">{comment.user?.full_name || "Usuario"}</span>
+                          {comment.user?.username && (
+                            <span className="text-xs text-muted-foreground">@{comment.user.username}</span>
                           )}
                         </div>
-                        <p className="text-sm">{comment.content}</p>
+                        <p className="text-sm">{comment.contenido}</p>
                       </div>
                       <p className="text-xs text-muted-foreground mt-1">
                         {new Date(comment.created_at).toLocaleDateString("es-ES", {

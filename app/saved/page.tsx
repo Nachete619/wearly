@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { AppLayout } from "@/components/app-layout"
 import { EmptyState } from "@/components/empty-state"
 import { LayersIcon } from "@/components/layers-icon"
@@ -10,100 +10,22 @@ import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Bookmark, Search, Filter, Heart, Grid3X3, List, Trash2, Share2 } from "lucide-react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
+import { useAuth } from "@/hooks/use-auth"
 
-// Datos de ejemplo para outfits guardados
-const savedOutfits = [
-  {
-    id: 1,
-    user: {
-      name: "Sofia Martinez",
-      username: "@sofia_style",
-      avatar: "/placeholder.svg?height=40&width=40&text=SM",
-    },
-    image: "/placeholder.svg?height=300&width=200&text=Casual+Friday",
-    title: "Look casual para viernes",
-    category: "Casual",
-    likes: 234,
-    savedDate: "2024-01-15",
-    tags: ["casual", "oficina", "viernes"],
-  },
-  {
-    id: 2,
-    user: {
-      name: "Ana Rodriguez",
-      username: "@ana_fashion",
-      avatar: "/placeholder.svg?height=40&width=40&text=AR",
-    },
-    image: "/placeholder.svg?height=400&width=200&text=Evening+Dress",
-    title: "Elegancia nocturna",
-    category: "Elegante",
-    likes: 456,
-    savedDate: "2024-01-14",
-    tags: ["elegante", "noche", "cena"],
-  },
-  {
-    id: 3,
-    user: {
-      name: "Lucia Fernandez",
-      username: "@lucia_trends",
-      avatar: "/placeholder.svg?height=40&width=40&text=LF",
-    },
-    image: "/placeholder.svg?height=250&width=200&text=Street+Style",
-    title: "Street style urbano",
-    category: "Urbano",
-    likes: 189,
-    savedDate: "2024-01-13",
-    tags: ["urbano", "street", "casual"],
-  },
-  {
-    id: 4,
-    user: {
-      name: "Carmen Lopez",
-      username: "@carmen_chic",
-      avatar: "/placeholder.svg?height=40&width=40&text=CL",
-    },
-    image: "/placeholder.svg?height=350&width=200&text=Boho+Chic",
-    title: "Vibes bohemios",
-    category: "Bohemio",
-    likes: 312,
-    savedDate: "2024-01-12",
-    tags: ["bohemio", "natural", "artesanal"],
-  },
-  {
-    id: 5,
-    user: {
-      name: "Maria Gonzalez",
-      username: "@maria_minimal",
-      avatar: "/placeholder.svg?height=40&width=40&text=MG",
-    },
-    image: "/placeholder.svg?height=280&width=200&text=Minimal+Look",
-    title: "Outfit minimalista",
-    category: "Minimalista",
-    likes: 278,
-    savedDate: "2024-01-11",
-    tags: ["minimalista", "limpio", "moderno"],
-  },
-  {
-    id: 6,
-    user: {
-      name: "Isabella Torres",
-      username: "@isa_vintage",
-      avatar: "/placeholder.svg?height=40&width=40&text=IT",
-    },
-    image: "/placeholder.svg?height=320&width=200&text=Vintage+Style",
-    title: "Estilo vintage",
-    category: "Vintage",
-    likes: 345,
-    savedDate: "2024-01-10",
-    tags: ["vintage", "retro", "clásico"],
-  },
-]
+type SavedOutfit = {
+  id: string
+  saved_at: string
+  outfit: any
+}
 
 export default function SavedPage() {
+  const { supabase, user } = useAuth()
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("todos")
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
-  const [selectedOutfits, setSelectedOutfits] = useState<Set<number>>(new Set())
+  const [selectedOutfits, setSelectedOutfits] = useState<Set<string>>(new Set())
+  const [savedOutfits, setSavedOutfits] = useState<any[]>([])
   const router = useRouter()
 
   const categories = ["todos", "casual", "elegante", "urbano", "bohemio", "minimalista", "vintage"]
@@ -111,16 +33,15 @@ export default function SavedPage() {
   const filteredOutfits = savedOutfits.filter((outfit) => {
     const matchesSearch = searchQuery
       ? outfit.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        outfit.user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        outfit.tags.some((tag) => tag.toLowerCase().includes(searchQuery.toLowerCase()))
+        outfit.user.full_name.toLowerCase().includes(searchQuery.toLowerCase())
       : true
 
-    const matchesCategory = selectedCategory === "todos" || outfit.category.toLowerCase() === selectedCategory
+    const matchesCategory = selectedCategory === "todos"
 
     return matchesSearch && matchesCategory
   })
 
-  const toggleOutfitSelection = (outfitId: number) => {
+  const toggleOutfitSelection = (outfitId: string) => {
     setSelectedOutfits((prev) => {
       const newSet = new Set(prev)
       if (newSet.has(outfitId)) {
@@ -136,6 +57,47 @@ export default function SavedPage() {
     // Aquí iría la lógica para remover los outfits seleccionados
     setSelectedOutfits(new Set())
   }
+
+  useEffect(() => {
+    const loadSaved = async () => {
+      if (!supabase || !user) return
+      const { data, error } = await supabase
+        .from("saved_outfits")
+        .select(`
+          id,
+          created_at,
+          outfit:outfits (
+            id,
+            title,
+            description,
+            likes_count,
+            saves_count,
+            created_at,
+            profiles(id, username, full_name, avatar_url),
+            outfit_images(id, image_url, image_order)
+          )
+        `)
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+
+      if (!error && data) {
+        const mapped = data.map((row: any) => ({
+          id: row.outfit?.id,
+          title: row.outfit?.title,
+          likes: row.outfit?.likes_count || 0,
+          savedDate: row.created_at,
+          outfit_images: row.outfit?.outfit_images || [],
+          user: {
+            name: row.outfit?.profiles?.full_name || "",
+            username: row.outfit?.profiles?.username || "",
+            avatar: row.outfit?.profiles?.avatar_url || "",
+          },
+        }))
+        setSavedOutfits(mapped)
+      }
+    }
+    loadSaved()
+  }, [supabase, user])
 
   if (filteredOutfits.length === 0 && savedOutfits.length === 0) {
     return (

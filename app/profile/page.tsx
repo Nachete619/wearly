@@ -175,11 +175,8 @@ export default function ProfilePage() {
   }
 
   const handleUploadProduct = () => {
-    // TODO: Implementar modal para subir productos
-    toast({
-      title: "Próximamente",
-      description: "La funcionalidad de productos estará disponible pronto",
-    })
+    // Redirigir a la página de crear producto
+    window.location.href = "/products/new"
   }
 
   // Añadir la función handleDeleteOutfit DENTRO del componente
@@ -397,7 +394,7 @@ export default function ProfilePage() {
               userId={user?.id || ""}
               isOwnProfile={true}
               onUploadProduct={handleUploadProduct}
-              onUploadPost={() => setShowCreatePostModal(true)}
+              onUploadPost={() => setShowUploadModal(true)}
             />
           ) : (
             // Outfits para usuarios comunes

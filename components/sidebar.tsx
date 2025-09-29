@@ -4,7 +4,7 @@ import type React from "react"
 
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { TrendingUp, Home, Bell, Bookmark, Plus } from "lucide-react"
+import { TrendingUp, Home, Bell, Bookmark, Plus, Package } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { WearlyLogo } from "@/components/wearly-logo"
@@ -13,6 +13,7 @@ import { useAuth } from "@/hooks/use-auth"
 const navigation = [
   { name: "Tendencias", href: "/trends", icon: TrendingUp },
   { name: "Inicio", href: "/home", icon: Home },
+  { name: "Productos", href: "/products/public", icon: Package },
   { name: "Notificaciones", href: "/notifications", icon: Bell, requiresAuth: true },
   { name: "Guardados", href: "/saved", icon: Bookmark, requiresAuth: true },
 ]

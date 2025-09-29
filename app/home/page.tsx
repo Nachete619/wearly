@@ -10,7 +10,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
 import { UploadOutfitModal } from "@/components/upload-outfit-modal"
-import { GeneralPostsFeed } from "@/components/general-posts-feed"
+import { likeOutfit, toggleSaveOutfit, isOutfitLiked, isOutfitSaved } from "@/lib/social-actions"
 import { Search, Filter, Heart, Bookmark, MessageCircle, MapPin, Plus, TrendingUp } from "lucide-react"
 import Link from "next/link"
 import Image from "next/image"
@@ -231,11 +231,9 @@ export default function HomePage() {
   const { user, supabase, loading } = useAuth()
   const [outfits, setOutfits] = useState<Outfit[]>([])
   const [filteredOutfits, setFilteredOutfits] = useState<Outfit[]>([])
-  const [searchQuery, setSearchQuery] = useState("")
   const [activeFilter, setActiveFilter] = useState("Todos")
   const [isLoading, setIsLoading] = useState(true)
   const [showUploadModal, setShowUploadModal] = useState(false)
-  const [activeTab, setActiveTab] = useState<"outfits" | "posts">("outfits")
   const mountedRef = useRef(true)
 
   useEffect(() => {
@@ -279,12 +277,23 @@ export default function HomePage() {
                 full_name: outfit.profiles?.full_name || "",
                 avatar_url: outfit.profiles?.avatar_url || "",
               },
-              is_liked: false, // We'll implement this later
-              is_saved: false, // We'll implement this later
+              is_liked: false,
+              is_saved: false,
             }))
 
-            setOutfits(transformedOutfits)
-            setFilteredOutfits(transformedOutfits)
+            // Enriquecer con estado real de like/save del usuario actual
+            const enriched = await Promise.all(
+              transformedOutfits.map(async (o: any) => {
+                const [liked, saved] = await Promise.all([
+                  isOutfitLiked(o.id),
+                  isOutfitSaved(o.id),
+                ])
+                return { ...o, is_liked: liked, is_saved: saved }
+              })
+            )
+
+            setOutfits(enriched)
+            setFilteredOutfits(enriched)
           }
         }
       } catch (error) {
@@ -304,17 +313,6 @@ export default function HomePage() {
 
     let filtered = outfits
 
-    // Apply search filter
-    if (searchQuery.trim()) {
-      filtered = filtered.filter(
-        (outfit) =>
-          outfit.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          outfit.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          outfit.user.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          outfit.clothing_items.some((item) => item.toLowerCase().includes(searchQuery.toLowerCase())),
-      )
-    }
-
     // Apply category filter
     if (activeFilter === "Recientes") {
       filtered = [...filtered].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
@@ -323,7 +321,7 @@ export default function HomePage() {
     }
 
     setFilteredOutfits(filtered)
-  }, [searchQuery, activeFilter, outfits])
+  }, [activeFilter, outfits])
 
   const handleLike = async (outfitId: string) => {
     if (!mountedRef.current) return
@@ -334,12 +332,30 @@ export default function HomePage() {
           return {
             ...outfit,
             is_liked: !outfit.is_liked,
-            likes_count: outfit.is_liked ? outfit.likes_count - 1 : outfit.likes_count + 1,
+            likes_count: Math.max(0, outfit.is_liked ? outfit.likes_count - 1 : outfit.likes_count + 1),
           }
         }
         return outfit
       }),
     )
+
+    try {
+      await likeOutfit(outfitId)
+    } catch (error) {
+      // rollback
+      setOutfits((prev) =>
+        prev.map((outfit) => {
+          if (outfit.id === outfitId) {
+            return {
+              ...outfit,
+              is_liked: !outfit.is_liked,
+              likes_count: Math.max(0, !outfit.is_liked ? outfit.likes_count - 1 : outfit.likes_count + 1),
+            }
+          }
+          return outfit
+        }),
+      )
+    }
   }
 
   const handleSave = async (outfitId: string) => {
@@ -351,12 +367,30 @@ export default function HomePage() {
           return {
             ...outfit,
             is_saved: !outfit.is_saved,
-            saves_count: outfit.is_saved ? outfit.saves_count - 1 : outfit.saves_count + 1,
+            saves_count: Math.max(0, outfit.is_saved ? outfit.saves_count - 1 : outfit.saves_count + 1),
           }
         }
         return outfit
       }),
     )
+
+    try {
+      await toggleSaveOutfit(outfitId)
+    } catch (error) {
+      // rollback
+      setOutfits((prev) =>
+        prev.map((outfit) => {
+          if (outfit.id === outfitId) {
+            return {
+              ...outfit,
+              is_saved: !outfit.is_saved,
+              saves_count: Math.max(0, !outfit.is_saved ? outfit.saves_count - 1 : outfit.saves_count + 1),
+            }
+          }
+          return outfit
+        }),
+      )
+    }
   }
 
   const formatDate = (dateString: string) => {
@@ -399,61 +433,24 @@ export default function HomePage() {
           </p>
         </div>
 
-        {/* Tabs */}
-        <div className="flex gap-1 mb-6 bg-muted p-1 rounded-lg w-fit mx-auto">
-          <button
-            onClick={() => setActiveTab("outfits")}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              activeTab === "outfits"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            Outfits
-          </button>
-          <button
-            onClick={() => setActiveTab("posts")}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              activeTab === "posts"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            Publicaciones
-          </button>
+
+        {/* Filters */}
+        <div className="flex justify-center gap-2 mb-8">
+          {["Todos", "Recientes", "Con ubicación"].map((filter) => (
+            <Button
+              key={filter}
+              variant={activeFilter === filter ? "default" : "outline"}
+              size="sm"
+              onClick={() => setActiveFilter(filter)}
+              className="flex items-center gap-2"
+            >
+              {filter === "Todos" && <Filter className="w-4 h-4" />}
+              {filter === "Recientes" && <TrendingUp className="w-4 h-4" />}
+              {filter === "Con ubicación" && <MapPin className="w-4 h-4" />}
+              {filter}
+            </Button>
+          ))}
         </div>
-
-        {/* Search and Filters - Solo para outfits */}
-        {activeTab === "outfits" && (
-          <div className="flex flex-col sm:flex-row gap-4 mb-8">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-              <Input
-                placeholder="Buscar outfits o usuarios..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-
-            <div className="flex gap-2">
-              {["Todos", "Recientes", "Con ubicación"].map((filter) => (
-                <Button
-                  key={filter}
-                  variant={activeFilter === filter ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setActiveFilter(filter)}
-                  className="flex items-center gap-2"
-                >
-                  {filter === "Todos" && <Filter className="w-4 h-4" />}
-                  {filter === "Recientes" && <TrendingUp className="w-4 h-4" />}
-                  {filter === "Con ubicación" && <MapPin className="w-4 h-4" />}
-                  {filter}
-                </Button>
-              ))}
-            </div>
-          </div>
-        )}
 
         {/* Loading State */}
         {isLoading && (
@@ -479,9 +476,7 @@ export default function HomePage() {
 
         {/* Content */}
         {!isLoading && (
-          <>
-            {activeTab === "outfits" ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {filteredOutfits.map((outfit) => (
               <Card
                 key={outfit.id}
@@ -587,36 +582,26 @@ export default function HomePage() {
                 </CardContent>
               </Card>
                 ))}
-              </div>
-            ) : (
-              /* Feed de Publicaciones */
-              <GeneralPostsFeed limit={20} showLoadMore={true} />
-            )}
+          </div>
+        )}
 
-            {/* Empty State para outfits */}
-            {activeTab === "outfits" && filteredOutfits.length === 0 && (
+        {/* Empty State */}
+        {!isLoading && filteredOutfits.length === 0 && (
               <div className="text-center py-12">
                 <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-muted flex items-center justify-center">
                   <Search className="w-8 h-8 text-muted-foreground" />
                 </div>
                 <h3 className="text-lg font-semibold mb-2">No se encontraron outfits</h3>
                 <p className="text-muted-foreground mb-4">
-                  {searchQuery
-                    ? `No hay resultados para "${searchQuery}"`
-                    : "Intenta cambiar los filtros o buscar algo diferente"}
+                  Intenta cambiar los filtros o buscar algo diferente
                 </p>
                 <Button
                   variant="outline"
-                  onClick={() => {
-                    setSearchQuery("")
-                    setActiveFilter("Todos")
-                  }}
+                  onClick={() => setActiveFilter("Todos")}
                 >
                   Limpiar filtros
                 </Button>
               </div>
-            )}
-          </>
         )}
 
         {/* Floating Upload Button */}
