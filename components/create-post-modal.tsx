@@ -246,7 +246,7 @@ export function CreatePostModal({ isOpen, onClose, onPostCreated }: CreatePostMo
                 username: user?.email?.split('@')[0] || "usuario",
                 full_name: user?.user_metadata?.full_name || "Usuario",
                 avatar_url: user?.user_metadata?.avatar_url,
-                tipo_usuario: user?.user_metadata?.tipo_usuario || 'comun'
+                tipo_usuario: user?.user_metadata?.tipo_usuario || 'usuario'
               }}
               avatarSize="md"
               showName={true}

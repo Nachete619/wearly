@@ -6,7 +6,7 @@ export interface UserProfile {
   full_name: string
   bio: string
   avatar_url: string
-  tipo_usuario: 'comun' | 'empresa'
+  tipo_usuario: 'usuario' | 'empresa'
   followers_count: number
   following_count: number
   instagram_url?: string
@@ -78,7 +78,7 @@ export async function getCurrentCompanyProfile(): Promise<CompanyProfile | null>
 }
 
 // Cambiar el tipo de usuario
-export async function changeUserType(tipoUsuario: 'comun' | 'empresa'): Promise<{ success: boolean; error?: string }> {
+export async function changeUserType(tipoUsuario: 'usuario' | 'empresa'): Promise<{ success: boolean; error?: string }> {
   try {
     const supabase = getBrowserSupabase()
     if (!supabase) throw new Error('Supabase client not available')
@@ -245,7 +245,7 @@ export async function convertToRegularUser(): Promise<{ success: boolean; error?
     }
 
     // Luego cambiar el tipo de usuario
-    const typeChangeResult = await changeUserType('comun')
+    const typeChangeResult = await changeUserType('usuario')
     return typeChangeResult
   } catch (error) {
     console.error('Error converting to regular user:', error)

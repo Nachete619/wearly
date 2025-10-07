@@ -22,7 +22,7 @@ export interface GeneralPost {
     username: string
     full_name: string
     avatar_url?: string
-    tipo_usuario: 'comun' | 'empresa'
+    tipo_usuario: 'usuario' | 'empresa'
   }
 }
 

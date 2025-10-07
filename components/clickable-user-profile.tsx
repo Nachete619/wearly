@@ -10,7 +10,7 @@ interface ClickableUserProfileProps {
     username: string
     full_name: string
     avatar_url?: string
-    tipo_usuario?: 'comun' | 'empresa'
+    tipo_usuario?: 'usuario' | 'empresa'
   }
   avatarSize?: 'sm' | 'md' | 'lg'
   showName?: boolean

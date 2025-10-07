@@ -81,11 +81,79 @@ export default function RegisterPage() {
         return
       }
 
-      if (data.user && !data.session) {
-        setSuccess("¡Cuenta creada! Revisa tu email para confirmar tu cuenta antes de iniciar sesión.")
-      } else if (data.session) {
-        // Auto-signed in, redirect will happen via useAuth hook
-        setSuccess("¡Cuenta creada exitosamente!")
+      // Si el usuario se creó exitosamente
+      if (data.user) {
+        console.log("Usuario creado exitosamente:", data.user.id)
+        
+        // Esperar un momento para que el trigger se ejecute
+        await new Promise(resolve => setTimeout(resolve, 2000))
+        
+        // Verificar si el perfil se creó automáticamente
+        const { data: profileData, error: profileError } = await supabase
+          .from('profiles')
+          .select('id, username, full_name')
+          .eq('id', data.user.id)
+          .single()
+
+        console.log("Verificación de perfil:", { profileData, profileError })
+
+        // Si no se creó el perfil automáticamente, intentar crearlo manualmente
+        if (profileError || !profileData) {
+          console.log("Perfil no creado automáticamente, creando manualmente...")
+          
+          // Generar username único para evitar duplicados
+          const baseUsername = email.split("@")[0].toLowerCase().replace(/[^a-z0-9]/g, '')
+          const timestamp = Date.now().toString().slice(-6)
+          const uniqueUsername = `${baseUsername}${timestamp}`
+          
+          console.log("Intentando crear perfil con username:", uniqueUsername)
+          
+          const { error: insertError } = await supabase
+            .from('profiles')
+            .insert({
+              id: data.user.id,
+              full_name: fullName,
+              username: uniqueUsername,
+              bio: null,
+              avatar_url: null,
+              followers_count: 0,
+              following_count: 0,
+              instagram_url: null,
+              pinterest_url: null,
+              tipo_usuario: 'usuario',
+              coins: 0,
+              is_active: true
+            })
+
+          if (insertError) {
+            console.error("Error creando perfil manualmente:", insertError)
+            
+            // Mostrar error más específico
+            if (insertError.message.includes("duplicate key")) {
+              setError("El usuario ya existe. Intenta iniciar sesión.")
+            } else if (insertError.message.includes("permission denied")) {
+              setError("Error de permisos. Contacta soporte técnico.")
+            } else if (insertError.message.includes("foreign key")) {
+              setError("Error: El usuario no existe en la base de datos. Intenta de nuevo.")
+            } else if (insertError.message.includes("violates")) {
+              setError(`Error de validación: ${insertError.message}`)
+            } else {
+              setError(`Error creando perfil: ${insertError.message}`)
+            }
+            return
+          } else {
+            console.log("Perfil creado manualmente exitosamente")
+          }
+        } else {
+          console.log("Perfil creado automáticamente por el trigger:", profileData)
+        }
+
+        if (!data.session) {
+          setSuccess("¡Cuenta creada! Revisa tu email para confirmar tu cuenta antes de iniciar sesión.")
+        } else {
+          // Auto-signed in, redirect will happen via useAuth hook
+          setSuccess("¡Cuenta creada exitosamente!")
+        }
       }
     } catch (error: any) {
       console.error("Error creating account:", error)

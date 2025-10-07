@@ -214,7 +214,7 @@ export default function SettingsPage() {
                 }
               </p>
 
-              {userProfile?.tipo_usuario === 'comun' && (
+              {userProfile?.tipo_usuario === 'usuario' && (
                 <Button 
                   onClick={() => setShowCompanyForm(true)} 
                   className="flex items-center gap-2"

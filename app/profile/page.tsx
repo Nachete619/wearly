@@ -85,7 +85,7 @@ export default function ProfilePage() {
           full_name: user.user_metadata?.full_name || "Usuario",
           bio: "Amante de la moda y el estilo",
           avatar_url: user.user_metadata?.avatar_url,
-          tipo_usuario: "comun",
+          tipo_usuario: "usuario",
           followers_count: 0,
           following_count: 0,
           created_at: new Date().toISOString(),
@@ -96,7 +96,7 @@ export default function ProfilePage() {
           ...profileData,
           followers_count: profileData.followers_count || 0,
           following_count: profileData.following_count || 0,
-          tipo_usuario: profileData.tipo_usuario || "comun",
+          tipo_usuario: profileData.tipo_usuario || "usuario",
         })
 
         // Si es usuario empresa, obtener también los datos de la empresa
