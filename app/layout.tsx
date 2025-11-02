@@ -9,7 +9,10 @@ const inter = Inter({ subsets: ["latin"] })
 export const metadata: Metadata = {
   title: "Wearly - Comparte tu estilo",
   description: "La plataforma social para compartir y descubrir outfits únicos",
-    generator: 'v0.dev'
+  generator: 'v0.dev',
+  icons: {
+    icon: '/wearly-logo.png',
+  }
 }
 
 export default function RootLayout({
