@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -20,7 +19,12 @@ import {
   XCircle,
   Edit,
   Trash2,
-  Package
+  Package,
+  Lock,
+  Eye,
+  EyeOff,
+  Moon,
+  Sun
 } from "lucide-react"
 import { 
   getCurrentUserProfile, 
@@ -31,10 +35,12 @@ import {
   UserProfile,
   CompanyProfile
 } from "@/lib/user-actions"
+import { getBrowserSupabase } from "@/lib/supabase"
+import { useTheme } from "@/hooks/use-theme"
+import { Switch } from "@/components/ui/switch"
 
 export default function SettingsPage() {
-  const [username, setUsername] = useState("TuNombreDeUsuario")
-  const [isSaving, setIsSaving] = useState(false)
+  const { isDark, setTheme } = useTheme()
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
   const [companyProfile, setCompanyProfile] = useState<CompanyProfile | null>(null)
   const [loading, setLoading] = useState(true)
@@ -50,6 +56,13 @@ export default function SettingsPage() {
     horarios: '',
     sitio_web: ''
   })
+
+  // Estados para cambio de contraseña
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [showNewPassword, setShowNewPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [isChangingPassword, setIsChangingPassword] = useState(false)
 
   // Cargar datos del usuario
   useEffect(() => {
@@ -81,13 +94,6 @@ export default function SettingsPage() {
     } finally {
       setLoading(false)
     }
-  }
-
-  const handleSaveUsername = async () => {
-    setIsSaving(true)
-    // Simulate save
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-    setIsSaving(false)
   }
 
   const handleConvertToCompany = async () => {
@@ -147,6 +153,53 @@ export default function SettingsPage() {
       setMessage({ type: 'error', text: 'Error inesperado al actualizar el perfil de empresa' })
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleChangePassword = async () => {
+    // Validaciones
+    if (!newPassword || !confirmPassword) {
+      setMessage({ type: 'error', text: 'Por favor completa todos los campos' })
+      return
+    }
+
+    if (newPassword.length < 6) {
+      setMessage({ type: 'error', text: 'La contraseña debe tener al menos 6 caracteres' })
+      return
+    }
+
+    if (newPassword !== confirmPassword) {
+      setMessage({ type: 'error', text: 'Las contraseñas no coinciden' })
+      return
+    }
+
+    setIsChangingPassword(true)
+    setMessage(null)
+
+    try {
+      const supabase = getBrowserSupabase()
+      if (!supabase) {
+        throw new Error('No se pudo conectar con el servicio')
+      }
+
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword
+      })
+
+      if (error) {
+        setMessage({ type: 'error', text: error.message || 'Error al cambiar la contraseña' })
+        return
+      }
+
+      setMessage({ type: 'success', text: '¡Contraseña actualizada exitosamente!' })
+      // Limpiar campos
+      setNewPassword('')
+      setConfirmPassword('')
+    } catch (error: any) {
+      console.error('Error changing password:', error)
+      setMessage({ type: 'error', text: error.message || 'Error inesperado al cambiar la contraseña' })
+    } finally {
+      setIsChangingPassword(false)
     }
   }
 
@@ -416,56 +469,113 @@ export default function SettingsPage() {
             </Card>
           )}
 
-          {/* Username Section */}
+          {/* Theme Section */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
-                <User className="w-5 h-5 text-blue-500" />
-                Nombre de Usuario
+                {isDark ? (
+                  <Moon className="w-5 h-5 text-blue-500" />
+                ) : (
+                  <Sun className="w-5 h-5 text-blue-500" />
+                )}
+                Modo Oscuro
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label htmlFor="dark-mode" className="text-base">
+                    {isDark ? 'Modo Oscuro Activado' : 'Modo Claro Activado'}
+                  </Label>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    {isDark 
+                      ? 'La interfaz está en modo oscuro' 
+                      : 'La interfaz está en modo claro'
+                    }
+                  </p>
+                </div>
+                <Switch
+                  id="dark-mode"
+                  checked={isDark}
+                  onCheckedChange={(checked) => {
+                    setTheme(checked ? 'dark' : 'light')
+                  }}
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Change Password Section */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Lock className="w-5 h-5 text-blue-500" />
+                Cambiar Contraseña
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="username">Nuevo nombre de usuario</Label>
-                <Input id="username" value={username} onChange={(e) => setUsername(e.target.value)} maxLength={30} />
-                <div className="flex justify-between items-center text-sm text-gray-500">
-                  <span></span>
-                  <span>{username.length}/30</span>
+                <Label htmlFor="newPassword">Nueva contraseña</Label>
+                <div className="relative">
+                  <Input
+                    id="newPassword"
+                    type={showNewPassword ? 'text' : 'password'}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="Mínimo 6 caracteres"
+                    className="pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword(!showNewPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    {showNewPassword ? (
+                      <EyeOff className="w-4 h-4" />
+                    ) : (
+                      <Eye className="w-4 h-4" />
+                    )}
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500">La contraseña debe tener al menos 6 caracteres</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="confirmPassword">Confirmar nueva contraseña</Label>
+                <div className="relative">
+                  <Input
+                    id="confirmPassword"
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Repite la nueva contraseña"
+                    className="pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    {showConfirmPassword ? (
+                      <EyeOff className="w-4 h-4" />
+                    ) : (
+                      <Eye className="w-4 h-4" />
+                    )}
+                  </button>
                 </div>
               </div>
 
-              <Button onClick={handleSaveUsername} disabled={isSaving} className="flex items-center gap-2">
-                <Save className="w-4 h-4" />
-                {isSaving ? "Guardando..." : "Guardar Nombre"}
+              <Button 
+                onClick={handleChangePassword} 
+                disabled={isChangingPassword || !newPassword || !confirmPassword}
+                className="flex items-center gap-2"
+              >
+                <Lock className="w-4 h-4" />
+                {isChangingPassword ? "Cambiando..." : "Cambiar Contraseña"}
               </Button>
             </CardContent>
           </Card>
 
-          {/* Profile Section */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <User className="w-5 h-5 text-blue-500" />
-                Foto de Perfil y Bio
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center gap-4">
-                <Avatar className="w-16 h-16">
-                  <AvatarFallback className="bg-gray-100">
-                    <User className="w-8 h-8 text-gray-400" />
-                  </AvatarFallback>
-                </Avatar>
-                <div>
-                  <p className="text-sm text-gray-600">Cambia tu foto de perfil y tu biografía editando tu perfil.</p>
-                </div>
-              </div>
-
-              <Button variant="outline" className="w-full">
-                Editar Perfil Completo
-              </Button>
-            </CardContent>
-          </Card>
         </div>
       </div>
     </AppLayout>
