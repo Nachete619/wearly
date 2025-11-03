@@ -66,10 +66,16 @@ export default function ProductDetailPage() {
       setLoading(true)
       setError(null)
 
+      console.log('=== FETCHING PRODUCT ===')
+      console.log('Product ID:', productId)
+
       // Fetch product
       const productData = await getProduct(productId)
 
+      console.log('Product data received:', productData)
+
       if (!productData) {
+        console.error('Product data is null or undefined')
         setError('Producto no encontrado')
         return
       }
@@ -95,6 +101,10 @@ export default function ProductDetailPage() {
         empresa_username: productData.empresa_username || undefined,
         empresa_avatar: productData.empresa_avatar || undefined,
       }
+
+      // Debug: log para verificar las imágenes
+      console.log('Product data:', productData)
+      console.log('Product images:', transformedProduct.imagenes)
 
       setProduct(transformedProduct)
 
@@ -196,9 +206,9 @@ export default function ProductDetailPage() {
 
   // Format price
   const formatPrice = (price: number) => {
-    return new Intl.NumberFormat('es-ES', {
+    return new Intl.NumberFormat('es-MX', {
       style: 'currency',
-      currency: 'EUR',
+      currency: 'MXN',
     }).format(price)
   }
 
@@ -417,16 +427,23 @@ export default function ProductDetailPage() {
             {/* Price */}
             <div className="space-y-2">
               <div className="flex items-baseline gap-3">
-                <span className="text-3xl font-bold text-green-600">{formatPrice(product.precio)}</span>
-                {product.precio_original && product.precio_original > product.precio && (
-                  <span className="text-lg text-muted-foreground line-through">
-                    {formatPrice(product.precio_original)}
-                  </span>
+                {/* Si precio actual es 0 o no existe, mostrar precio original si existe */}
+                {((!product.precio || product.precio === 0) && product.precio_original) ? (
+                  <span className="text-3xl font-bold text-green-600">{formatPrice(product.precio_original)}</span>
+                ) : (
+                  <>
+                    <span className="text-3xl font-bold text-green-600">{formatPrice(product.precio)}</span>
+                    {product.precio_original && product.precio_original > product.precio && (
+                      <span className="text-lg text-muted-foreground line-through">
+                        {formatPrice(product.precio_original)}
+                      </span>
+                    )}
+                  </>
                 )}
               </div>
-              {product.rebaja_porcentaje && product.rebaja_porcentaje > 0 && (
+              {product.rebaja_porcentaje && product.rebaja_porcentaje > 0 && product.precio_original && product.precio && product.precio_original > product.precio && (
                 <p className="text-sm text-green-600 font-medium">
-                  Ahorras {formatPrice(product.precio_original! - product.precio)} ({product.rebaja_porcentaje}% de
+                  Ahorras {formatPrice(product.precio_original - product.precio)} ({product.rebaja_porcentaje}% de
                   descuento)
                 </p>
               )}

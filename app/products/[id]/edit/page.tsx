@@ -14,6 +14,7 @@ import { Switch } from '@/components/ui/switch'
 import { getProductById, updateProduct, type Product, type UpdateProductData } from '@/lib/product-actions'
 import { getCurrentUserProfile } from '@/lib/user-actions'
 import { getBrowserSupabase } from '@/lib/supabase'
+import { validateImageFile } from '@/lib/storage-utils'
 
 const CATEGORIAS_PREDEFINIDAS = [
   'Electrónicos', 'Ropa', 'Hogar', 'Deportes', 'Libros', 'Juguetes', 
@@ -32,19 +33,19 @@ export default function EditProductPage() {
   const [userProfile, setUserProfile] = useState<any>(null)
   const [product, setProduct] = useState<Product | null>(null)
 
-  // Campos del formulario
-  const [formData, setFormData] = useState<UpdateProductData>({
+  // Campos del formulario - precio y stock_disponible pueden ser undefined inicialmente
+  const [formData, setFormData] = useState<Omit<UpdateProductData, 'precio' | 'stock_disponible'> & { precio?: number; stock_disponible?: number }>({
     titulo: '',
     descripcion: '',
     link_tienda: '',
     ubicacion: '',
-    precio: 0,
-    precio_original: 0,
-    rebaja_porcentaje: 0,
+    precio: undefined,
+    precio_original: undefined,
+    rebaja_porcentaje: undefined,
     categoria: '',
     etiquetas: [],
     imagenes: [],
-    stock_disponible: 0,
+    stock_disponible: undefined,
     es_destacado: false,
     es_activo: true
   })
@@ -90,18 +91,24 @@ export default function EditProductPage() {
         }
 
         setProduct(product)
+        // Determinar si el producto tiene descuento (precio original > precio actual)
+        const tieneDescuento = product.precio_original && product.precio_original > product.precio
+        
         setFormData({
           titulo: product.titulo,
           descripcion: product.descripcion || '',
           link_tienda: product.link_tienda || '',
           ubicacion: product.ubicacion || '',
-          precio: product.precio,
-          precio_original: product.precio_original || 0,
-          rebaja_porcentaje: product.rebaja_porcentaje || 0,
+          // Precio actual: solo se llena si hay descuento (precio original > precio actual)
+          // Si no hay descuento, significa que el precio mostrado es el precio_original
+          // y el usuario debería decidir si quiere ingresar un precio actual
+          precio: tieneDescuento ? product.precio : undefined,
+          precio_original: product.precio_original && product.precio_original > 0 ? product.precio_original : undefined,
+          rebaja_porcentaje: product.rebaja_porcentaje && product.rebaja_porcentaje > 0 ? product.rebaja_porcentaje : undefined,
           categoria: product.categoria || '',
           etiquetas: product.etiquetas || [],
           imagenes: product.imagenes || [],
-          stock_disponible: product.stock_disponible || 0,
+          stock_disponible: product.stock_disponible !== undefined && product.stock_disponible > 0 ? product.stock_disponible : undefined,
           es_destacado: product.es_destacado || false,
           es_activo: product.es_activo
         })
@@ -118,8 +125,25 @@ export default function EditProductPage() {
     checkUserAccess()
   }, [productId, router])
 
-  const handleInputChange = (field: keyof UpdateProductData, value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }))
+  const handleInputChange = (field: keyof UpdateProductData | 'precio', value: any) => {
+    setFormData(prev => {
+      const updated = { ...prev, [field]: value } as any
+      
+      // Si se está cambiando precio o precio_original, calcular descuento automáticamente
+      // Solo calcular descuento si hay AMBOS precios (actual y original) y el original > actual
+      if (field === 'precio' || field === 'precio_original') {
+        if (updated.precio !== undefined && updated.precio_original && updated.precio_original > updated.precio) {
+          // Calcular el porcentaje de descuento: ((precio_original - precio_actual) / precio_original) * 100
+          const discount = Math.round(((updated.precio_original - updated.precio) / updated.precio_original) * 100)
+          updated.rebaja_porcentaje = discount
+        } else {
+          // Si no hay descuento válido (no hay ambos precios o el original no es mayor), limpiar el campo
+          updated.rebaja_porcentaje = undefined
+        }
+      }
+      
+      return updated
+    })
   }
 
   const handleAddTag = () => {
@@ -144,19 +168,12 @@ export default function EditProductPage() {
     if (files) {
       const newFiles = Array.from(files)
       const validFiles = newFiles.filter(file => {
-        // Validar tipo de archivo
-        const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
-        if (!validTypes.includes(file.type)) {
-          setError('Solo se permiten archivos de imagen (JPEG, PNG, WebP, GIF)')
+        // Validar usando la función de validación que incluye webp
+        const validation = validateImageFile(file)
+        if (!validation.valid) {
+          setError(validation.error || 'Formato de imagen no válido')
           return false
         }
-        
-        // Validar tamaño (5MB)
-        if (file.size > 5 * 1024 * 1024) {
-          setError('El archivo es demasiado grande. Máximo 5MB')
-          return false
-        }
-        
         return true
       })
 
@@ -207,7 +224,7 @@ export default function EditProductPage() {
   }
 
   const calculateDiscount = () => {
-    if (formData.precio_original && formData.precio_original > formData.precio) {
+    if (formData.precio_original && formData.precio && formData.precio_original > formData.precio) {
       return Math.round(((formData.precio_original - formData.precio) / formData.precio_original) * 100)
     }
     return 0
@@ -221,12 +238,15 @@ export default function EditProductPage() {
       return
     }
 
-    if (formData.precio <= 0) {
+    // Validar que si hay precio ingresado, sea mayor a 0
+    // No validar si precio es undefined (opcional)
+    if (formData.precio !== undefined && formData.precio !== null && formData.precio <= 0) {
       setError('El precio debe ser mayor a 0')
       return
     }
 
-    if (formData.precio_original && formData.precio_original < formData.precio) {
+    // Validar que si hay precio original y precio actual, el original sea mayor o igual
+    if (formData.precio_original && formData.precio && formData.precio_original < formData.precio) {
       setError('El precio original debe ser mayor o igual al precio actual')
       return
     }
@@ -249,11 +269,44 @@ export default function EditProductPage() {
       const existingUrls = formData.imagenes?.filter(url => !url.startsWith('blob:')) || []
       const allImages = [...existingUrls, ...uploadedUrls]
 
-      // Actualizar producto
-      const result = await updateProduct(productId, {
-        ...formData,
-        imagenes: allImages
+      // Si no hay precio actual pero sí hay precio original, usar el precio original como precio
+      let precioFinal: number = formData.precio ?? 0
+      let precioOriginalFinal = formData.precio_original
+      let rebajaPorcentajeFinal = formData.rebaja_porcentaje
+
+      // Si no hay precio actual pero sí hay precio original, usar el precio original como precio
+      if (formData.precio === undefined && precioOriginalFinal) {
+        precioFinal = precioOriginalFinal
+        precioOriginalFinal = undefined // No mostrar precio original si no hay descuento
+        rebajaPorcentajeFinal = undefined // No hay descuento en este caso
+      }
+
+      // Limpiar el objeto de datos antes de enviarlo (eliminar campos undefined)
+      const updateData: UpdateProductData = {
+        titulo: formData.titulo,
+        descripcion: formData.descripcion || undefined,
+        link_tienda: formData.link_tienda || undefined,
+        ubicacion: formData.ubicacion || undefined,
+        precio: precioFinal,
+        precio_original: precioOriginalFinal || undefined,
+        rebaja_porcentaje: rebajaPorcentajeFinal || undefined,
+        categoria: formData.categoria || undefined,
+        etiquetas: formData.etiquetas && formData.etiquetas.length > 0 ? formData.etiquetas : undefined,
+        imagenes: allImages.length > 0 ? allImages : undefined,
+        stock_disponible: formData.stock_disponible !== undefined ? formData.stock_disponible : undefined,
+        es_destacado: formData.es_destacado,
+        es_activo: formData.es_activo
+      }
+
+      // Eliminar campos undefined para evitar errores en Supabase
+      Object.keys(updateData).forEach(key => {
+        if (updateData[key as keyof UpdateProductData] === undefined) {
+          delete updateData[key as keyof UpdateProductData]
+        }
       })
+
+      // Actualizar producto
+      const result = await updateProduct(productId, updateData)
       
       if (result.success) {
         setSuccess('Producto actualizado exitosamente')
@@ -261,11 +314,13 @@ export default function EditProductPage() {
           router.push('/products')
         }, 2000)
       } else {
+        console.error('Error updating product:', result.error)
         setError(result.error || 'Error al actualizar el producto')
       }
     } catch (error) {
-      console.error('Error updating product:', error)
-      setError('Error al actualizar el producto')
+      console.error('Error updating product (exception):', error)
+      const errorMessage = error instanceof Error ? error.message : 'Error desconocido'
+      setError(`Error al actualizar el producto: ${errorMessage}`)
     } finally {
       setSaving(false)
     }
@@ -404,17 +459,20 @@ export default function EditProductPage() {
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <Label htmlFor="precio">Precio Actual *</Label>
+                  <Label htmlFor="precio">Precio Actual</Label>
                   <Input
                     id="precio"
                     type="number"
                     step="0.01"
                     min="0"
-                    value={formData.precio}
-                    onChange={(e) => handleInputChange('precio', parseFloat(e.target.value) || 0)}
+                    value={formData.precio !== undefined ? formData.precio : ''}
+                    onChange={(e) => {
+                      const value = e.target.value.trim()
+                      handleInputChange('precio', value === '' || value === '0' ? undefined : parseFloat(value))
+                    }}
                     placeholder="0.00"
-                    required
                   />
+                  <p className="text-xs text-muted-foreground mt-1">Opcional</p>
                 </div>
 
                 <div>
@@ -424,8 +482,8 @@ export default function EditProductPage() {
                     type="number"
                     step="0.01"
                     min="0"
-                    value={formData.precio_original}
-                    onChange={(e) => handleInputChange('precio_original', parseFloat(e.target.value) || 0)}
+                    value={formData.precio_original || ''}
+                    onChange={(e) => handleInputChange('precio_original', e.target.value ? parseFloat(e.target.value) : undefined)}
                     placeholder="0.00"
                   />
                 </div>
@@ -438,17 +496,21 @@ export default function EditProductPage() {
                     step="0.01"
                     min="0"
                     max="100"
-                    value={formData.rebaja_porcentaje}
-                    onChange={(e) => handleInputChange('rebaja_porcentaje', parseFloat(e.target.value) || 0)}
+                    value={formData.rebaja_porcentaje || ''}
+                    onChange={(e) => handleInputChange('rebaja_porcentaje', e.target.value ? parseFloat(e.target.value) : undefined)}
                     placeholder="0"
+                    readOnly={!!(formData.precio_original && formData.precio && formData.precio_original > formData.precio)}
                   />
+                  {formData.precio_original && formData.precio && formData.precio_original > formData.precio && (
+                    <p className="text-xs text-muted-foreground mt-1">Calculado automáticamente</p>
+                  )}
                 </div>
               </div>
 
-              {formData.precio_original && formData.precio_original > formData.precio && (
+              {formData.precio_original && formData.precio && formData.precio_original > formData.precio && (
                 <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
                   <p className="text-green-800 text-sm">
-                    Descuento calculado: {calculateDiscount()}% de ahorro
+                    Descuento calculado: <strong>{calculateDiscount()}%</strong>
                   </p>
                 </div>
               )}
@@ -471,8 +533,8 @@ export default function EditProductPage() {
                     id="stock"
                     type="number"
                     min="0"
-                    value={formData.stock_disponible}
-                    onChange={(e) => handleInputChange('stock_disponible', parseInt(e.target.value) || 0)}
+                    value={formData.stock_disponible || ''}
+                    onChange={(e) => handleInputChange('stock_disponible', e.target.value ? parseInt(e.target.value) : undefined)}
                     placeholder="0"
                   />
                 </div>

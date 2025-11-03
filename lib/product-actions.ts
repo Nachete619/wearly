@@ -113,14 +113,81 @@ export async function getProduct(productId: string): Promise<ProductWithCompany 
     const supabase = getBrowserSupabase()
     if (!supabase) throw new Error('Supabase client not available')
 
-    const { data, error } = await supabase
-      .from('active_products_view')
-      .select('*')
+    // Intentar primero con la tabla products directamente para obtener todos los campos incluyendo imagenes
+    const { data: productData, error: productError } = await supabase
+      .from('products')
+      .select(`
+        *,
+        profiles (
+          id,
+          username,
+          full_name,
+          avatar_url,
+          company_profiles (
+            nombre_empresa,
+            descripcion
+          )
+        )
+      `)
       .eq('id', productId)
+      .eq('es_activo', true)
       .single()
 
-    if (error) throw error
-    return data
+    if (productError) {
+      console.error('Error getting product from products table:', productError)
+      // Fallback a active_products_view si existe
+      const { data: viewData, error: viewError } = await supabase
+        .from('active_products_view')
+        .select('*')
+        .eq('id', productId)
+        .single()
+
+      if (viewError) {
+        console.error('Error getting product from active_products_view:', viewError)
+        throw viewError
+      }
+      
+      console.log('Product from view:', viewData)
+      return viewData
+    }
+
+    // Transformar los datos para que coincidan con ProductWithCompany
+    if (productData) {
+      // Extraer el perfil de los datos anidados
+      const profiles = productData.profiles as any
+      
+      const transformed: ProductWithCompany = {
+        id: productData.id,
+        empresa_id: productData.empresa_id,
+        titulo: productData.titulo,
+        descripcion: productData.descripcion,
+        link_tienda: productData.link_tienda,
+        ubicacion: productData.ubicacion,
+        precio: productData.precio,
+        precio_original: productData.precio_original,
+        rebaja_porcentaje: productData.rebaja_porcentaje,
+        categoria: productData.categoria,
+        etiquetas: productData.etiquetas || [],
+        imagenes: productData.imagenes || [],
+        stock_disponible: productData.stock_disponible,
+        es_destacado: productData.es_destacado,
+        es_activo: productData.es_activo,
+        created_at: productData.created_at,
+        updated_at: productData.updated_at,
+        empresa_nombre: profiles?.company_profiles?.nombre_empresa || undefined,
+        empresa_username: profiles?.username || undefined,
+        empresa_avatar: profiles?.avatar_url || undefined,
+      }
+      
+      console.log('Product data from products table:', transformed)
+      console.log('Product images:', transformed.imagenes)
+      console.log('Product images type:', typeof transformed.imagenes)
+      console.log('Product images is array:', Array.isArray(transformed.imagenes))
+      
+      return transformed
+    }
+
+    return null
   } catch (error) {
     console.error('Error getting product:', error)
     return null
@@ -219,17 +286,32 @@ export async function updateProduct(productId: string, productData: UpdateProduc
       return { success: false, error: 'No tienes permisos para editar este producto' }
     }
 
-    // Actualizar el producto
-    const { error } = await supabase
-      .from('products')
-      .update(productData)
-      .eq('id', productId)
+    // Limpiar el objeto de datos (eliminar campos undefined)
+    const cleanedData: any = {}
+    Object.keys(productData).forEach(key => {
+      const value = productData[key as keyof UpdateProductData]
+      if (value !== undefined && value !== null) {
+        cleanedData[key] = value
+      }
+    })
 
-    if (error) throw error
+    // Actualizar el producto
+    const { error, data } = await supabase
+      .from('products')
+      .update(cleanedData)
+      .eq('id', productId)
+      .select()
+
+    if (error) {
+      console.error('Supabase update error:', error)
+      console.error('Data being sent:', cleanedData)
+      throw new Error(error.message || 'Error al actualizar el producto en la base de datos')
+    }
 
     return { success: true }
   } catch (error) {
     console.error('Error updating product:', error)
+    console.error('Product data received:', productData)
     return { success: false, error: error instanceof Error ? error.message : 'Error desconocido' }
   }
 }

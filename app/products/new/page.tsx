@@ -15,6 +15,7 @@ import { Switch } from '@/components/ui/switch'
 import { createProduct, type CreateProductData } from '@/lib/product-actions'
 import { getCurrentUserProfile } from '@/lib/user-actions'
 import { getBrowserSupabase } from '@/lib/supabase'
+import { validateImageFile } from '@/lib/storage-utils'
 
 const CATEGORIAS_PREDEFINIDAS = [
   'Ropa y Accesorios',
@@ -37,19 +38,19 @@ export default function NewProductPage() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
 
-  // Formulario
-  const [formData, setFormData] = useState<CreateProductData>({
+  // Formulario - precio y stock_disponible pueden ser undefined inicialmente
+  const [formData, setFormData] = useState<Omit<CreateProductData, 'precio' | 'stock_disponible'> & { precio?: number; stock_disponible?: number }>({
     titulo: '',
     descripcion: '',
     link_tienda: '',
     ubicacion: '',
-    precio: 0,
+    precio: undefined,
     precio_original: undefined,
     rebaja_porcentaje: undefined,
     categoria: '',
     etiquetas: [],
     imagenes: [],
-    stock_disponible: 0,
+    stock_disponible: undefined,
     es_destacado: false
   })
 
@@ -76,8 +77,25 @@ export default function NewProductPage() {
     }
   }
 
-  const handleInputChange = (field: keyof CreateProductData, value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }))
+  const handleInputChange = (field: keyof CreateProductData | 'precio', value: any) => {
+    setFormData(prev => {
+      const updated = { ...prev, [field]: value } as any
+      
+      // Si se está cambiando precio o precio_original, calcular descuento automáticamente
+      // Solo calcular descuento si hay AMBOS precios (actual y original) y el original > actual
+      if (field === 'precio' || field === 'precio_original') {
+        if (updated.precio !== undefined && updated.precio_original && updated.precio_original > updated.precio) {
+          // Calcular el porcentaje de descuento: ((precio_original - precio_actual) / precio_original) * 100
+          const discount = Math.round(((updated.precio_original - updated.precio) / updated.precio_original) * 100)
+          updated.rebaja_porcentaje = discount
+        } else {
+          // Si no hay descuento válido (no hay ambos precios o el original no es mayor), limpiar el campo
+          updated.rebaja_porcentaje = undefined
+        }
+      }
+      
+      return updated
+    })
   }
 
   const handleAddTag = () => {
@@ -102,14 +120,10 @@ export default function NewProductPage() {
     if (files) {
       const newFiles = Array.from(files)
       const validFiles = newFiles.filter(file => {
-        // Validar tipo de archivo
-        if (!file.type.startsWith('image/')) {
-          setError('Solo se permiten archivos de imagen')
-          return false
-        }
-        // Validar tamaño (máximo 5MB)
-        if (file.size > 5 * 1024 * 1024) {
-          setError('Las imágenes deben ser menores a 5MB')
+        // Validar usando la función de validación que incluye webp
+        const validation = validateImageFile(file)
+        if (!validation.valid) {
+          setError(validation.error || 'Formato de imagen no válido')
           return false
         }
         return true
@@ -140,7 +154,7 @@ export default function NewProductPage() {
   }
 
   const calculateDiscount = () => {
-    if (formData.precio_original && formData.precio_original > formData.precio) {
+    if (formData.precio_original && formData.precio && formData.precio_original > formData.precio) {
       return Math.round(((formData.precio_original - formData.precio) / formData.precio_original) * 100)
     }
     return 0
@@ -154,12 +168,14 @@ export default function NewProductPage() {
       return
     }
 
-    if (formData.precio <= 0) {
+    // Validar que si hay precio, sea mayor a 0
+    if (formData.precio !== undefined && formData.precio <= 0) {
       setError('El precio debe ser mayor a 0')
       return
     }
 
-    if (formData.precio_original && formData.precio_original < formData.precio) {
+    // Validar que si hay precio original y precio actual, el original sea mayor o igual
+    if (formData.precio_original && formData.precio && formData.precio_original < formData.precio) {
       setError('El precio original debe ser mayor o igual al precio actual')
       return
     }
@@ -180,8 +196,25 @@ export default function NewProductPage() {
       }
 
       // Crear producto con las URLs de las imágenes subidas
-      const productData = {
+      // Si no hay precio actual, usar el precio original como precio
+      // Asegurarse de que stock_disponible sea un número válido
+      let precioFinal: number = formData.precio ?? 0
+      let precioOriginalFinal = formData.precio_original
+      let rebajaPorcentajeFinal = formData.rebaja_porcentaje
+
+      // Si no hay precio actual pero sí hay precio original, usar el precio original como precio
+      if (formData.precio === undefined && precioOriginalFinal) {
+        precioFinal = precioOriginalFinal
+        precioOriginalFinal = undefined // No mostrar precio original si no hay descuento
+        rebajaPorcentajeFinal = undefined // No hay descuento en este caso
+      }
+
+      const productData: CreateProductData = {
         ...formData,
+        precio: precioFinal,
+        precio_original: precioOriginalFinal,
+        rebaja_porcentaje: rebajaPorcentajeFinal,
+        stock_disponible: formData.stock_disponible || 0, // Convertir undefined a 0 si no se especifica
         imagenes: uploadedImageUrls
       }
 
@@ -356,17 +389,17 @@ export default function NewProductPage() {
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <Label htmlFor="precio">Precio Actual *</Label>
+                  <Label htmlFor="precio">Precio Actual</Label>
                   <Input
                     id="precio"
                     type="number"
                     step="0.01"
                     min="0"
-                    value={formData.precio}
-                    onChange={(e) => handleInputChange('precio', parseFloat(e.target.value) || 0)}
+                    value={formData.precio || ''}
+                    onChange={(e) => handleInputChange('precio', e.target.value ? parseFloat(e.target.value) : undefined)}
                     placeholder="0.00"
-                    required
                   />
+                  <p className="text-xs text-muted-foreground mt-1">Opcional</p>
                 </div>
 
                 <div>
@@ -393,11 +426,15 @@ export default function NewProductPage() {
                     value={formData.rebaja_porcentaje || ''}
                     onChange={(e) => handleInputChange('rebaja_porcentaje', e.target.value ? parseFloat(e.target.value) : undefined)}
                     placeholder="0"
+                    readOnly={!!(formData.precio_original && formData.precio && formData.precio_original > formData.precio)}
                   />
+                  {formData.precio_original && formData.precio && formData.precio_original > formData.precio && (
+                    <p className="text-xs text-muted-foreground mt-1">Calculado automáticamente</p>
+                  )}
                 </div>
               </div>
 
-              {formData.precio_original && formData.precio_original > formData.precio && (
+              {formData.precio_original && formData.precio && formData.precio_original > formData.precio && (
                 <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
                   <p className="text-sm text-green-800">
                     Descuento calculado: <strong>{calculateDiscount()}%</strong>
@@ -423,8 +460,8 @@ export default function NewProductPage() {
                     id="stock_disponible"
                     type="number"
                     min="0"
-                    value={formData.stock_disponible}
-                    onChange={(e) => handleInputChange('stock_disponible', parseInt(e.target.value) || 0)}
+                    value={formData.stock_disponible || ''}
+                    onChange={(e) => handleInputChange('stock_disponible', e.target.value ? parseInt(e.target.value) : undefined)}
                     placeholder="0"
                   />
                 </div>

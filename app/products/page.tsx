@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Search, Filter, Package, Eye, EyeOff, Star, StarOff, Edit, Trash2 } from 'lucide-react'
+import { Plus, Search, Filter, Package, Eye, EyeOff, Star, StarOff, Edit, Trash2, ArrowLeft, Settings } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -106,9 +106,9 @@ export default function ProductsPage() {
   })
 
   const formatPrice = (price: number) => {
-    return new Intl.NumberFormat('es-ES', {
+    return new Intl.NumberFormat('es-MX', {
       style: 'currency',
-      currency: 'EUR'
+      currency: 'MXN'
     }).format(price)
   }
 
@@ -142,9 +142,20 @@ export default function ProductsPage() {
       <div className="flex flex-col gap-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold">Mis Productos</h1>
-            <p className="text-gray-600">Gestiona los productos de tu empresa</p>
+          <div className="flex items-center gap-4">
+            <Button
+              onClick={() => router.push('/settings')}
+              variant="outline"
+              size="sm"
+              className="flex items-center gap-2"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Configuración
+            </Button>
+            <div>
+              <h1 className="text-3xl font-bold">Mis Productos</h1>
+              <p className="text-gray-600">Gestiona los productos de tu empresa</p>
+            </div>
           </div>
           <Button 
             onClick={() => router.push('/products/new')}

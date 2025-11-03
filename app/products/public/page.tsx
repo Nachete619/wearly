@@ -162,9 +162,9 @@ export default function PublicProductsPage() {
   })
 
   const formatPrice = (price: number) => {
-    return new Intl.NumberFormat('es-ES', {
+    return new Intl.NumberFormat('es-MX', {
       style: 'currency',
-      currency: 'EUR'
+      currency: 'MXN'
     }).format(price)
   }
 
@@ -363,13 +363,22 @@ export default function PublicProductsPage() {
 
                   {/* Precio */}
                   <div className="flex items-center gap-2 mb-3">
-                    <span className="text-xl font-bold text-green-600">
-                      {formatPrice(product.precio)}
-                    </span>
-                    {product.precio_original && product.precio_original > product.precio && (
-                      <span className="text-sm text-muted-foreground line-through">
+                    {/* Si precio actual es 0 o no existe, mostrar precio original si existe */}
+                    {((!product.precio || product.precio === 0) && product.precio_original) ? (
+                      <span className="text-xl font-bold text-green-600">
                         {formatPrice(product.precio_original)}
                       </span>
+                    ) : (
+                      <>
+                        <span className="text-xl font-bold text-green-600">
+                          {formatPrice(product.precio)}
+                        </span>
+                        {product.precio_original && product.precio_original > product.precio && (
+                          <span className="text-sm text-muted-foreground line-through">
+                            {formatPrice(product.precio_original)}
+                          </span>
+                        )}
+                      </>
                     )}
                   </div>
 
