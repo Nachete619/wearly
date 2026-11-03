@@ -1,6 +1,6 @@
 # Wearly
 
-Red social web dedicada a la **moda local**, con un feed visual al estilo Pinterest donde se puede descubrir y compartir looks, marcas y estilos de la comunidad.
+Red social web dedicada a la **moda local**, con un feed visual al estilo Pinterest.
 
 **[Ver demo en vivo](https://wearly-seven.vercel.app)**
 
@@ -17,7 +17,6 @@ COMPLETAR: agregá acá una captura de pantalla o un GIF corto de la app.
 ## Funcionalidades
 
 - Feed visual de publicaciones organizado al estilo Pinterest.
-- Diseño responsive, pensado para usarse desde el celular y la computadora.
 - Interfaz construida con componentes reutilizables.
 
 <!--
@@ -27,16 +26,18 @@ COMPLETAR: sumá una viñeta por cada función que realmente tenga la app. Ejemp
 - Perfiles de usuario
 - Guardar o dar "me gusta" a publicaciones
 - Buscador o filtros por categoría / estilo / marca
+- Diseño responsive (celular y computadora)
 -->
 
 ## Tecnologías
 
 | Área | Herramientas |
 |------|--------------|
-| Framework | [Next.js](https://nextjs.org/) y [React](https://react.dev/) |
+| Framework | [Next.js 14](https://nextjs.org/) (App Router) y [React 18](https://react.dev/) |
 | Lenguaje | [TypeScript](https://www.typescriptlang.org/) |
-| Estilos | [Tailwind CSS](https://tailwindcss.com/) |
-| Componentes de UI | [shadcn/ui](https://ui.shadcn.com/) |
+| Estilos | [Tailwind CSS](https://tailwindcss.com/) y [tailwindcss-animate](https://github.com/jamiebuilds/tailwindcss-animate) |
+| Componentes de UI | [shadcn/ui](https://ui.shadcn.com/) sobre [Radix UI](https://www.radix-ui.com/) |
+| Backend / datos | [Supabase](https://supabase.com/) (`@supabase/ssr` y `supabase-js`) |
 | Despliegue | [Vercel](https://vercel.com/) |
 
 ## Estructura del proyecto
@@ -53,7 +54,7 @@ wearly/
 
 ## Cómo correrlo en tu computadora
 
-Requisitos: [Node.js](https://nodejs.org/) 18 o superior.
+Requisitos: [Node.js](https://nodejs.org/) 18.17 o superior y una cuenta gratuita de [Supabase](https://supabase.com/).
 
 ```bash
 # 1. Clonar el repositorio
@@ -63,18 +64,43 @@ cd wearly
 # 2. Instalar dependencias
 npm install
 
-# 3. Iniciar el servidor de desarrollo
+# 3. Configurar las variables de entorno (ver la sección siguiente)
+cp .env.example .env.local
+
+# 4. Iniciar el servidor de desarrollo
 npm run dev
 ```
 
 Después abrí [http://localhost:3000](http://localhost:3000) en el navegador.
 
-También podés usar `pnpm install` y `pnpm dev` si preferís pnpm.
+### Variables de entorno
+
+Creá un archivo `.env.local` en la raíz del proyecto con los datos de tu proyecto de Supabase (los encontrás en *Project Settings → API*):
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=tu_url_de_supabase
+NEXT_PUBLIC_SUPABASE_ANON_KEY=tu_anon_key_de_supabase
+```
+
+> Nunca subas el archivo `.env.local` al repositorio.
 
 <!--
-COMPLETAR: si la app usa variables de entorno (por ejemplo claves de una base de datos o de un servicio de imágenes),
-creá un archivo `.env.example` con los nombres (sin los valores reales) y explicalo acá. Si no usa ninguna, borrá este comentario.
+COMPLETAR antes de subir:
+1. Verificá que los nombres de las variables coincidan con los que usa tu código (buscá "process.env" en el proyecto).
+   Si usás más variables, agregalas acá.
+2. Creá un archivo `.env.example` con esos mismos nombres y valores vacíos para que el paso 3 funcione.
 -->
+
+## Scripts disponibles
+
+| Comando | Qué hace |
+|---------|----------|
+| `npm run dev` | Inicia el servidor de desarrollo |
+| `npm run build` | Genera la versión de producción |
+| `npm run start` | Ejecuta la versión de producción |
+| `npm run lint` | Revisa el código con ESLint |
+
+También podés usar `pnpm` en lugar de `npm`.
 
 ## Autor
 
